@@ -569,6 +569,7 @@ button:active{
 <div class="toast" id="toast">Data tersimpan</div>
 
 <script>
+const CASHFLOW_API_URL="https://script.google.com/macros/s/AKfycbyr2Z3c1d9Br78rdU7pRSl95RapMyZj0DHCOhVSgOj0F_Fyi4YQd6hjP8O3eLH236grrA/exec";
 const STORAGE_KEY="cashflow_harian_v1";
 const EXPENSE_CATEGORIES=["modal","operasional","harian","bayareun"];
 let expenseItems=[];
@@ -927,6 +928,86 @@ function escapeHTML(s){
   return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
 }
 
+async function saveCashflowToAPI(){
+  const t=collect();
+  const modalTotal=expenseItems
+    .filter(item=>item.category==="modal")
+    .reduce((sum,item)=>sum+(Number(item.amount)||0),0);
+  const operasionalTotal=expenseItems
+    .filter(item=>item.category==="operasional")
+    .reduce((sum,item)=>sum+(Number(item.amount)||0),0);
+
+  const labaKotor=t.income-modalTotal;
+  const labaBersih=labaKotor-operasionalTotal;
+  const status=t.saldoAkhir>t.saldoSebelumnya?"PLUS":t.saldoAkhir<t.saldoSebelumnya?"MINUS":"IMPAS";
+  const selisih=t.saldoAkhir-t.saldoSebelumnya;
+
+  const transactions=[];
+
+  incomeRows().forEach(row=>{
+    const label=String(row[0]||"");
+    let kategori="SHOPEE";
+    let keterangan=label;
+
+    if(label.startsWith("Shopee - ")){
+      kategori="SHOPEE";
+      keterangan=label.replace("Shopee - ","").trim();
+    }else if(label.startsWith("WhatsApp")){
+      kategori="WHATSAPP";
+      keterangan=label.replace(/^WhatsApp\s*-\s*/,"").trim();
+    }else{
+      kategori="WHATSAPP";
+    }
+
+    transactions.push({
+      tipe:"PEMASUKAN",
+      kategori,
+      keterangan,
+      nominal:Number(row[1])||0
+    });
+  });
+
+  expenseRows().forEach(row=>{
+    transactions.push({
+      tipe:"PENGELUARAN",
+      kategori:String(row[2]||"").toUpperCase(),
+      keterangan:String(row[0]||"").trim(),
+      nominal:Number(row[1])||0
+    });
+  });
+
+  const payload={
+    action:"saveCashflow",
+    data:{
+      tanggal:dateKey,
+      saldoAwal:t.saldoSebelumnya,
+      pemasukan:t.income,
+      modal:modalTotal,
+      labaKotor,
+      operasional:operasionalTotal,
+      labaBersih,
+      totalPengeluaran:t.expense,
+      saldoAkhir:t.saldoAkhir,
+      status,
+      selisih
+    },
+    transactions
+  };
+
+  const response=await fetch(CASHFLOW_API_URL,{
+    method:"POST",
+    headers:{"Content-Type":"text/plain;charset=utf-8"},
+    body:JSON.stringify(payload)
+  });
+
+  if(!response.ok) throw new Error("Server API tidak merespons dengan benar.");
+
+  const result=await response.json();
+  if(!result.success) throw new Error(result.message||"Data gagal disimpan ke database.");
+
+  return result;
+}
+
 function incomeRows(){
   const rows=[];
   document.querySelectorAll(".income-group").forEach(group=>{
@@ -1269,7 +1350,7 @@ function createPDF(){
   doc.save(filename);
 }
 
-document.getElementById("pdfBtn").addEventListener("click",()=>{
+document.getElementById("pdfBtn").addEventListener("click",async()=>{
   const whatsappAmount=num(document.querySelector('.income-group[data-key="whatsapp"] .money'));
   const whatsappDesc=document.getElementById("whatsappDesc").value.trim();
   if(whatsappAmount>0&&!whatsappDesc){
@@ -1287,7 +1368,22 @@ document.getElementById("pdfBtn").addEventListener("click",()=>{
     showModal("Pengeluaran belum disimpan","Simpan dulu pengeluaran yang sedang diisi.","OK",()=>document.getElementById("expenseInputAmount").focus());return;
   }
 
-  createPDF();
+  const btn=document.getElementById("pdfBtn");
+  const originalText=btn.textContent;
+  btn.disabled=true;
+  btn.textContent="MENYIMPAN KE DATABASE...";
+
+  try{
+    const result=await saveCashflowToAPI();
+    btn.textContent="MEMBUAT PDF...";
+    createPDF();
+    showToast("Tersimpan • "+result.idHarian);
+  }catch(err){
+    showModal("Gagal menyimpan",err?.message||"Data gagal disimpan ke Google Sheet.","OK");
+  }finally{
+    btn.disabled=false;
+    btn.textContent=originalText;
+  }
 });
 
 let lockedScrollY=0;

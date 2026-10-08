@@ -402,7 +402,7 @@ button:active{
 .header-menu-btn{position:relative;z-index:201;pointer-events:auto}
 .header .summary-menu{pointer-events:auto}
 </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
 <main class="app">
@@ -985,7 +985,7 @@ function row(label,value){
 }
 
 function createPDF(){
-  if(typeof html2pdf!=='function'){
+  if(!window.jspdf || !window.jspdf.jsPDF){
     showModal("PDF belum siap","Mesin PDF belum termuat. Pastikan koneksi internet aktif lalu refresh halaman.","OK");
     return;
   }
@@ -996,77 +996,277 @@ function createPDF(){
   ir.forEach(x=>{
     const label=String(x[0]||"");
     let category="LAINNYA", detail=label;
-    if(label.startsWith("Shopee - ")){category="SHOPEE";detail=label.replace("Shopee - ","");}
-    else if(label.startsWith("WhatsApp")){category="WHATSAPP";detail=label.replace(/^WhatsApp\s*-\s*/,"");}
-    transactionRows.push({type:"PEMASUKAN",category,detail,amount:Number(x[1])||0});
+    if(label.startsWith("Shopee - ")){
+      category="SHOPEE";
+      detail=label.replace("Shopee - ","");
+    }else if(label.startsWith("WhatsApp")){
+      category="WHATSAPP";
+      detail=label.replace(/^WhatsApp\s*-\s*/,"");
+    }
+    transactionRows.push({
+      type:"PEMASUKAN",
+      category,
+      detail,
+      amount:Number(x[1])||0
+    });
   });
-  er.forEach(x=>transactionRows.push({type:"PENGELUARAN",category:String(x[2]||"LAINNYA"),detail:String(x[0]||"Pengeluaran"),amount:Number(x[1])||0}));
+
+  er.forEach(x=>{
+    transactionRows.push({
+      type:"PENGELUARAN",
+      category:String(x[2]||"LAINNYA"),
+      detail:String(x[0]||"Pengeluaran"),
+      amount:Number(x[1])||0
+    });
+  });
 
   const status=t.saldoAkhir>t.saldoSebelumnya?"PLUS":t.saldoAkhir<t.saldoSebelumnya?"MINUS":"IMPAS";
   const selisih=t.saldoAkhir-t.saldoSebelumnya;
-  const modalTotal=expenseItems.filter(item=>item.category==="modal").reduce((sum,item)=>sum+(Number(item.amount)||0),0);
-  const operasionalTotal=expenseItems.filter(item=>item.category==="operasional").reduce((sum,item)=>sum+(Number(item.amount)||0),0);
+  const modalTotal=expenseItems
+    .filter(item=>item.category==="modal")
+    .reduce((sum,item)=>sum+(Number(item.amount)||0),0);
+  const operasionalTotal=expenseItems
+    .filter(item=>item.category==="operasional")
+    .reduce((sum,item)=>sum+(Number(item.amount)||0),0);
   const labaKotor=t.income-modalTotal;
   const labaBersih=labaKotor-operasionalTotal;
 
-  const report=document.createElement("div");
-  report.id="pdfReportRoot";
-  report.style.cssText="position:fixed;left:0;top:0;width:215mm;background:#fff;color:#111;font-family:Arial,Helvetica,sans-serif;z-index:2147483647;opacity:1;pointer-events:none;";
-  report.innerHTML=`
-  <style>
-    #pdfReportRoot,*{box-sizing:border-box}
-    .pdf-page{width:215mm;height:330mm;padding:15mm;position:relative;background:#fff;overflow:hidden;page-break-after:always}
-    .pdf-page:last-child{page-break-after:auto}
-    .pdf-header{text-align:center}.pdf-title{font-size:22pt;font-weight:900}.pdf-day{font-size:12pt;font-weight:900;text-transform:uppercase;margin-top:6pt}.pdf-date{font-size:10pt;color:#555;margin-top:2pt}
-    .pdf-summary-grid{margin-top:16pt;display:grid;grid-template-columns:1fr 1fr;gap:10pt}.pdf-summary-card{border:1.2pt solid #222;border-radius:9pt;padding:12pt;text-align:center}.pdf-summary-card .label{font-size:8.5pt;font-weight:900;text-transform:uppercase}.pdf-summary-card .value{font-size:17pt;font-weight:900;margin-top:4pt}.green{color:#16803c;background:#effaf2;border-color:#bfe5c9}.red{color:#d72d2d;background:#fff1f1;border-color:#efc3c3}.yellow{color:#806d00;background:#fffde8;border-color:#eadf8c}.blue{color:#1769d2;background:#eef5ff;border-color:#c7dbf7}
-    .pdf-balance{margin-top:13pt;border:1.2pt solid #111;border-radius:10pt;padding:12pt}.pdf-balance-row{display:flex;justify-content:space-between;gap:12pt;padding:5pt 0;font-size:10pt}.pdf-balance-row b{font-weight:900}.pdf-balance-row.final{border-top:1pt solid #111;margin-top:4pt;padding-top:9pt;font-size:14pt}.pdf-balance-row.status{margin-top:5pt;border-top:1pt solid #ddd;padding-top:8pt}.status-plus{color:#16803c;font-weight:900}.status-minus{color:#d72d2d;font-weight:900}.status-impas{color:#1769d2;font-weight:900}
-    .pdf-sign{position:absolute;right:15mm;bottom:17mm;width:68mm;text-align:center;font-size:10pt}.pdf-sign-date{margin-bottom:4pt}.pdf-sign-role{font-weight:900}.pdf-sign-space{height:42mm}.pdf-sign-line{border-top:1pt solid #111;padding-top:5pt}
-    .pdf-page2-title{text-align:center;font-size:17pt;font-weight:900}.pdf-page2-meta{text-align:center;color:#555;font-size:9.5pt;margin:3pt 0 14pt}.pdf-data-block{border:1pt solid #222;border-radius:8pt;overflow:hidden;margin-bottom:12pt}.pdf-data-block-title{padding:8pt 10pt;background:#f3f3f3;font-size:10.5pt;font-weight:900;text-transform:uppercase}.pdf-data-grid{width:100%;border-collapse:collapse;table-layout:fixed}.pdf-data-grid td{border-top:.5pt solid #ddd;padding:6pt 8pt;font-size:9.5pt}.pdf-data-grid td:first-child{width:58%;font-weight:700}.pdf-data-grid td:last-child{width:42%;text-align:right;font-weight:900}
-    .pdf-transaction-table{width:100%;border-collapse:collapse;table-layout:fixed}.pdf-transaction-table th{background:#111;color:#fff;padding:6pt 5pt;font-size:7.5pt;font-weight:900;text-transform:uppercase;border:1pt solid #111}.pdf-transaction-table td{padding:5.5pt 5pt;font-size:7.5pt;border:1pt solid #ccc;vertical-align:top;word-break:break-word}.pdf-transaction-table th:nth-child(1){width:5%}.pdf-transaction-table th:nth-child(2){width:14%}.pdf-transaction-table th:nth-child(3){width:17%}.pdf-transaction-table th:nth-child(4){width:16%}.pdf-transaction-table th:nth-child(5){width:32%}.pdf-transaction-table th:nth-child(6){width:16%}.pdf-center{text-align:center}.pdf-money{text-align:right;white-space:nowrap;font-weight:800}.pdf-income{color:#16803c;font-weight:900}.pdf-expense{color:#d72d2d;font-weight:900}.pdf-empty{text-align:center;color:#777;padding:14pt!important}.pdf-footer{position:absolute;bottom:8mm;left:15mm;right:15mm;text-align:center;font-size:7.5pt;color:#888}
-  </style>
-  <section class="pdf-page">
-    <div class="pdf-header"><div class="pdf-title">CASHFLOW HARIAN</div><div class="pdf-day">${escapeHTML(dayName)}</div><div class="pdf-date">${escapeHTML(dateText)}</div></div>
-    <div class="pdf-summary-grid">
-      <div class="pdf-summary-card green"><div class="label">Pemasukan Hari Ini</div><div class="value">${rp(t.income)}</div></div>
-      <div class="pdf-summary-card red"><div class="label">Total Pengeluaran</div><div class="value">${rp(t.expense)}</div></div>
-      <div class="pdf-summary-card yellow"><div class="label">Laba Kotor</div><div class="value">${rp(labaKotor)}</div></div>
-      <div class="pdf-summary-card blue"><div class="label">Laba Bersih</div><div class="value">${rp(labaBersih)}</div></div>
-    </div>
-    <div class="pdf-balance">
-      <div class="pdf-balance-row"><span>SALDO OPERASIONAL SEBELUMNYA</span><b>${rp(t.saldoSebelumnya)}</b></div>
-      <div class="pdf-balance-row"><span>PEMASUKAN</span><b>${rp(t.income)}</b></div>
-      <div class="pdf-balance-row"><span>TOTAL PENGELUARAN</span><b>${rp(t.expense)}</b></div>
-      <div class="pdf-balance-row final"><span>SALDO OPERASIONAL AKHIR</span><b>${t.saldoAkhir<0?"-":""}${rp(Math.abs(t.saldoAkhir))}</b></div>
-      <div class="pdf-balance-row status"><span>STATUS SALDO HARI INI</span><b class="${status==="PLUS"?"status-plus":status==="MINUS"?"status-minus":"status-impas"}">${status} ${selisih>0?"+":""}${rp(selisih)}</b></div>
-    </div>
-    <div class="pdf-sign"><div class="pdf-sign-date">Bekasi, ${escapeHTML(dateText)}</div><div class="pdf-sign-role">BENDAHARA</div><div class="pdf-sign-space"></div><div class="pdf-sign-line">(________________________)</div></div>
-  </section>
-  <section class="pdf-page">
-    <div class="pdf-page2-title">DATA HARIAN &amp; TRANSAKSI</div><div class="pdf-page2-meta">${escapeHTML(dayName)}, ${escapeHTML(dateText)}</div>
-    <div class="pdf-data-block"><div class="pdf-data-block-title">DATA HARIAN</div><table class="pdf-data-grid"><tbody>
-      <tr><td>TANGGAL</td><td>${escapeHTML(dateText)}</td></tr><tr><td>SALDO AWAL</td><td>${rp(t.saldoSebelumnya)}</td></tr><tr><td>PEMASUKAN</td><td>${rp(t.income)}</td></tr><tr><td>MODAL</td><td>${rp(modalTotal)}</td></tr><tr><td>LABA KOTOR</td><td>${rp(labaKotor)}</td></tr><tr><td>OPERASIONAL</td><td>${rp(operasionalTotal)}</td></tr><tr><td>LABA BERSIH</td><td>${rp(labaBersih)}</td></tr><tr><td>TOTAL PENGELUARAN</td><td>${rp(t.expense)}</td></tr><tr><td>SALDO AKHIR</td><td>${t.saldoAkhir<0?"-":""}${rp(Math.abs(t.saldoAkhir))}</td></tr><tr><td>STATUS</td><td>${status}</td></tr><tr><td>SELISIH</td><td>${selisih>0?"+":""}${rp(selisih)}</td></tr>
-    </tbody></table></div>
-    <div class="pdf-data-block"><div class="pdf-data-block-title">TRANSAKSI</div><table class="pdf-transaction-table"><thead><tr><th>NO</th><th>TANGGAL</th><th>TIPE</th><th>KATEGORI</th><th>KETERANGAN</th><th>NOMINAL</th></tr></thead><tbody>
-      ${transactionRows.length?transactionRows.map((x,i)=>`<tr><td class="pdf-center">${i+1}</td><td>${escapeHTML(dateText)}</td><td class="${x.type==="PEMASUKAN"?"pdf-income":"pdf-expense"}">${x.type}</td><td>${escapeHTML(x.category)}</td><td>${escapeHTML(x.detail)}</td><td class="pdf-money">${rp(x.amount)}</td></tr>`).join(""):"<tr><td colspan=\"6\" class=\"pdf-empty\">Tidak ada transaksi</td></tr>"}
-    </tbody></table></div>
-    <div class="pdf-footer">Cashflow Harian • ${escapeHTML(dateText)}</div>
-  </section>`;
-  document.body.appendChild(report);
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({
+    orientation:"portrait",
+    unit:"mm",
+    format:[215,330],
+    compress:true
+  });
+
+  const W=215, H=330, M=20, CW=W-(M*2);
+  const black=[17,17,17], gray=[95,95,95], line=[205,205,205];
+  const green=[22,128,60], red=[215,45,45], blue=[23,105,210], yellow=[128,109,0];
+
+  function money(n){
+    const v=Number(n)||0;
+    return (v<0?"-":"")+"Rp "+Math.abs(v).toLocaleString("id-ID");
+  }
+
+  function setFont(size=10,bold=false,color=black){
+    doc.setFont("helvetica",bold?"bold":"normal");
+    doc.setFontSize(size);
+    doc.setTextColor(...color);
+  }
+
+  function rect(x,y,w,h,fill,border=black,r=2){
+    if(fill)doc.setFillColor(...fill);
+    doc.setDrawColor(...border);
+    doc.setLineWidth(.35);
+    doc.roundedRect(x,y,w,h,r,r,fill?"FD":"S");
+  }
+
+  function center(text,y,size=10,bold=false,color=black){
+    setFont(size,bold,color);
+    doc.text(String(text),W/2,y,{align:"center"});
+  }
+
+  function labelValue(y,label,value,color=black){
+    setFont(9.5,false,gray);
+    doc.text(label,M,y);
+    setFont(9.5,true,color);
+    doc.text(value,W-M,y,{align:"right"});
+  }
+
+  function summaryCard(x,y,w,h,label,value,color,bg){
+    rect(x,y,w,h,bg,color,3);
+    centerAt(label,x+w/2,y+9,8,true,color);
+    centerAt(value,x+w/2,y+20,14,true,color);
+  }
+
+  function centerAt(text,x,y,size=10,bold=false,color=black){
+    setFont(size,bold,color);
+    doc.text(String(text),x,y,{align:"center"});
+  }
+
+  function fitText(text,maxWidth,size=8,bold=false){
+    setFont(size,bold,black);
+    const parts=doc.splitTextToSize(String(text||"-"),maxWidth);
+    return parts.length?parts:["-"];
+  }
+
+  function drawTable(x,y,width,headers,rows,colWidths){
+    const headerH=8;
+    const rowMinH=7;
+
+    doc.setFillColor(...black);
+    doc.setDrawColor(...black);
+    doc.rect(x,y,width,headerH,"FD");
+
+    let cx=x;
+    headers.forEach((h,i)=>{
+      const cw=width*colWidths[i];
+      setFont(7.2,true,[255,255,255]);
+      doc.text(h,cx+2,y+5.2);
+      cx+=cw;
+    });
+
+    let cy=y+headerH;
+
+    rows.forEach(row=>{
+      const cellLines=row.map((cell,i)=>fitText(cell,width*colWidths[i]-4,7.2,false));
+      const maxLines=Math.max(...cellLines.map(a=>a.length));
+      const rh=Math.max(rowMinH,maxLines*3.8+3);
+
+      if(cy+rh>H-16){
+        doc.addPage();
+        cy=M;
+        doc.setFillColor(...black);
+        doc.rect(x,cy,width,headerH,"FD");
+        cx=x;
+        headers.forEach((h,i)=>{
+          const cw=width*colWidths[i];
+          setFont(7.2,true,[255,255,255]);
+          doc.text(h,cx+2,cy+5.2);
+          cx+=cw;
+        });
+        cy+=headerH;
+      }
+
+      doc.setDrawColor(...line);
+      doc.setLineWidth(.25);
+      doc.rect(x,cy,width,rh,"S");
+
+      cx=x;
+      cellLines.forEach((lines,i)=>{
+        const cw=width*colWidths[i];
+        if(i===0){
+          centerAt(lines[0],cx+cw/2,cy+4.8,7.2,false,black);
+        }else if(i===2){
+          setFont(7.2,true,row[2]==="PEMASUKAN"?green:red);
+          doc.text(lines,cx+2,cy+4.5);
+        }else if(i===5){
+          setFont(7.2,true,black);
+          doc.text(lines,cx+cw-2,cy+4.5,{align:"right"});
+        }else{
+          setFont(7.2,false,black);
+          doc.text(lines,cx+2,cy+4.5);
+        }
+        cx+=cw;
+      });
+
+      let xx=x;
+      for(let i=0;i<colWidths.length-1;i++){
+        xx+=width*colWidths[i];
+        doc.line(xx,cy,xx,cy+rh);
+      }
+      cy+=rh;
+    });
+
+    return cy;
+  }
+
+  // PAGE 1 — RINGKASAN
+  center("CASHFLOW HARIAN",20,17,true,black);
+  center(dayName.toUpperCase(),27,10,true,black);
+  center(dateText,33,8.5,false,gray);
+
+  const gap=5, cardW=(CW-gap)/2, cardH=30;
+  summaryCard(M,43,cardW,cardH,"PEMASUKAN HARI INI",money(t.income),green,[239,250,242]);
+  summaryCard(M+cardW+gap,43,cardW,cardH,"TOTAL PENGELUARAN",money(t.expense),red,[255,241,241]);
+  summaryCard(M,43+cardH+gap,cardW,cardH,"LABA KOTOR",money(labaKotor),yellow,[255,253,232]);
+  summaryCard(M+cardW+gap,43+cardH+gap,cardW,cardH,"LABA BERSIH",money(labaBersih),blue,[238,245,255]);
+
+  const by=120;
+  rect(M,by,CW,70,null,black,3);
+  labelValue(by+10,"SALDO OPERASIONAL SEBELUMNYA",money(t.saldoSebelumnya),black);
+  labelValue(by+19,"PEMASUKAN",money(t.income),green);
+  labelValue(by+28,"TOTAL PENGELUARAN",money(t.expense),red);
+
+  doc.setDrawColor(...black);
+  doc.line(M+5,by+34,W-M-5,by+34);
+  labelValue(by+47,"SALDO OPERASIONAL AKHIR",money(t.saldoAkhir),t.saldoAkhir<0?red:blue);
+
+  const statusColor=status==="PLUS"?green:status==="MINUS"?red:blue;
+  const statusText=status+" "+(selisih>0?"+":"")+money(selisih);
+  labelValue(by+60,"STATUS SALDO HARI INI",statusText,statusColor);
+
+  setFont(8,false,gray);
+  doc.text("STATUS = perbandingan saldo akhir dengan saldo awal hari ini.",M,198);
+
+  setFont(8.5,false,gray);
+  doc.text("Bekasi, "+dateText,W-M,282,{align:"right"});
+  setFont(9,true,black);
+  doc.text("BENDAHARA",W-M,289,{align:"right"});
+  doc.line(W-72,308,W-M,308);
+  doc.text("(________________________)",W-72,314);
+
+  // PAGE 2 — DATA HARIAN + TRANSAKSI
+  doc.addPage();
+
+  center("DATA HARIAN & TRANSAKSI",19,15,true,black);
+  center(dayName+", "+dateText,25,8.5,false,gray);
+
+  const dataY=34;
+  setFont(9,true,black);
+  doc.text("DATA HARIAN",M,dataY);
+  doc.setDrawColor(...black);
+  doc.line(M,dataY+2,W-M,dataY+2);
+
+  const dailyRows=[
+    ["TANGGAL",dateText],
+    ["SALDO AWAL",money(t.saldoSebelumnya)],
+    ["PEMASUKAN",money(t.income)],
+    ["MODAL",money(modalTotal)],
+    ["LABA KOTOR",money(labaKotor)],
+    ["OPERASIONAL",money(operasionalTotal)],
+    ["LABA BERSIH",money(labaBersih)],
+    ["TOTAL PENGELUARAN",money(t.expense)],
+    ["SALDO AKHIR",money(t.saldoAkhir)],
+    ["STATUS",status],
+    ["SELISIH",(selisih>0?"+":"")+money(selisih)]
+  ];
+
+  let dy=dataY+7;
+  dailyRows.forEach((r,i)=>{
+    doc.setDrawColor(...line);
+    doc.rect(M,dy,CW,6.2,"S");
+    setFont(7.6,i===0?false:true,[75,75,75]);
+    doc.text(r[0],M+2,dy+4.2);
+    setFont(7.6,true,i===9?(status==="PLUS"?green:status==="MINUS"?red:blue):black);
+    doc.text(r[1],W-M-2,dy+4.2,{align:"right"});
+    dy+=6.2;
+  });
+
+  const txY=dy+9;
+  setFont(9,true,black);
+  doc.text("TRANSAKSI",M,txY);
+  doc.line(M,txY+2,W-M,txY+2);
+
+  const tableY=txY+6;
+  const tableRows=transactionRows.map((x,i)=>[
+    String(i+1),
+    dateText,
+    x.type,
+    x.category,
+    x.detail,
+    money(x.amount)
+  ]);
+
+  if(tableRows.length){
+    drawTable(
+      M,
+      tableY,
+      CW,
+      ["NO","TANGGAL","TIPE","KATEGORI","KETERANGAN","NOMINAL"],
+      tableRows,
+      [0.05,0.14,0.17,0.16,0.32,0.16]
+    );
+  }else{
+    rect(M,tableY,CW,12,null,line,1);
+    center("Tidak ada transaksi",tableY+8,8,false,gray);
+  }
+
+  setFont(7,false,gray);
+  doc.text("Cashflow Harian • "+dateText,W/2,H-7,{align:"center"});
 
   const filename="Cashflow_Harian_"+dateKey.replace(/[^0-9-]/g,"")+".pdf";
-  const options={
-    margin:0,
-    filename,
-    image:{type:"jpeg",quality:0.98},
-    html2canvas:{scale:2,useCORS:true,backgroundColor:"#ffffff",logging:false},
-    jsPDF:{unit:"mm",format:[215,330],orientation:"portrait",compress:true},
-    pagebreak:{mode:["css","legacy"],before:".pdf-page"}
-  };
-  html2pdf().set(options).from(report).save().then(()=>{report.remove();}).catch(err=>{
-    report.remove();
-    console.error("PDF ERROR",err);
-    showModal("PDF gagal dibuat","Terjadi error saat membuat PDF. Buka Console untuk melihat detail error.","OK");
-  });
+  doc.save(filename);
 }
 
 document.getElementById("pdfBtn").addEventListener("click",()=>{

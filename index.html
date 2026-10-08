@@ -1173,7 +1173,7 @@ function createPDF(){
   summaryCard(M+cardW+gap,43+cardH+gap,cardW,cardH,"LABA BERSIH",money(labaBersih),blue,[238,245,255]);
 
   const by=120;
-  rect(M,by,CW,70,null,black,3);
+  doc.setDrawColor(...line);
   labelValue(by+10,"SALDO OPERASIONAL SEBELUMNYA",money(t.saldoSebelumnya),black);
   labelValue(by+19,"PEMASUKAN",money(t.income),green);
   labelValue(by+28,"TOTAL PENGELUARAN",money(t.expense),red);

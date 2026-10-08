@@ -924,6 +924,25 @@ function restore(){
 }
 restore();
 
+function resetDailyFormAfterSave(saldoAkhir){
+  document.getElementById("saldoSebelumnya").value=Number(saldoAkhir||0).toLocaleString("id-ID");
+
+  document.querySelectorAll(".income-group .money").forEach(input=>{input.value="";});
+  document.querySelectorAll(".income-group .extra-row").forEach(row=>row.remove());
+  document.getElementById("whatsappDesc").value="";
+
+  expenseItems=[];
+  editingExpenseIndex=-1;
+  clearExpenseForm();
+  renderExpenseList();
+
+  document.getElementById("summaryBackdrop").classList.remove("show");
+  unlockModalScroll();
+  switchPage("income");
+  refresh();
+  save();
+}
+
 function escapeHTML(s){
   return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
 }
@@ -1377,6 +1396,7 @@ document.getElementById("pdfBtn").addEventListener("click",async()=>{
     const result=await saveCashflowToAPI();
     btn.textContent="MEMBUAT PDF...";
     createPDF();
+    resetDailyFormAfterSave(collect().saldoAkhir);
     showToast("Tersimpan • "+result.idHarian);
   }catch(err){
     showModal("Gagal menyimpan",err?.message||"Data gagal disimpan ke Google Sheet.","OK");

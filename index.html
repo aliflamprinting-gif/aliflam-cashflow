@@ -1084,52 +1084,56 @@ function row(label,value){
   return `<div class="r"><span>${escapeHTML(label)}</span><b>${rp(value)}</b></div>`;
 }
 
-function createPDF(){
+function createPDF(saveResult){
   if(!window.jspdf || !window.jspdf.jsPDF){
     showModal("PDF belum siap","Mesin PDF belum termuat. Pastikan koneksi internet aktif lalu refresh halaman.","OK");
     return;
   }
 
-  const ir=incomeRows(), er=expenseRows(), t=collect();
+  const ir=incomeRows(), er=expenseRows();
+  const saved=saveResult?.summary;
+  const current=collect();
+  const t=saved?{
+    income:Number(saved.pemasukan)||0,
+    expense:Number(saved.totalPengeluaran)||0,
+    saldoSebelumnya:Number(saved.saldoAwal)||0,
+    saldoAkhir:Number(saved.saldoAkhir)||0
+  }:current;
   const transactionRows=[];
 
-  ir.forEach(x=>{
-    const label=String(x[0]||"");
-    let category="LAINNYA", detail=label;
-    if(label.startsWith("Shopee - ")){
-      category="SHOPEE";
-      detail=label.replace("Shopee - ","");
-    }else if(label.startsWith("WhatsApp")){
-      category="WHATSAPP";
-      detail=label.replace(/^WhatsApp\s*-\s*/,"");
-    }
-    transactionRows.push({
-      type:"PEMASUKAN",
-      category,
-      detail,
-      amount:Number(x[1])||0
+  if(Array.isArray(saveResult?.transactions)){
+    saveResult.transactions.forEach(x=>transactionRows.push({
+      type:String(x.tipe||""),
+      category:String(x.kategori||""),
+      detail:String(x.keterangan||""),
+      amount:Number(x.nominal)||0
+    }));
+  }else{
+    ir.forEach(x=>{
+      const label=String(x[0]||"");
+      let category="LAINNYA", detail=label;
+      if(label.startsWith("Shopee - ")){
+        category="SHOPEE";
+        detail=label.replace("Shopee - ","");
+      }else if(label.startsWith("WhatsApp")){
+        category="WHATSAPP";
+        detail=label.replace(/^WhatsApp\s*-\s*/,"");
+      }
+      transactionRows.push({type:"PEMASUKAN",category,detail,amount:Number(x[1])||0});
     });
-  });
+    er.forEach(x=>transactionRows.push({type:"PENGELUARAN",category:String(x[2]||"LAINNYA"),detail:String(x[0]||"Pengeluaran"),amount:Number(x[1])||0}));
+  }
 
-  er.forEach(x=>{
-    transactionRows.push({
-      type:"PENGELUARAN",
-      category:String(x[2]||"LAINNYA"),
-      detail:String(x[0]||"Pengeluaran"),
-      amount:Number(x[1])||0
-    });
-  });
-
-  const status=t.saldoAkhir>t.saldoSebelumnya?"PLUS":t.saldoAkhir<t.saldoSebelumnya?"MINUS":"IMPAS";
-  const selisih=t.saldoAkhir-t.saldoSebelumnya;
-  const modalTotal=expenseItems
+  const status=saved?.status||(t.saldoAkhir>t.saldoSebelumnya?"PLUS":t.saldoAkhir<t.saldoSebelumnya?"MINUS":"IMPAS");
+  const selisih=saved?Number(saved.selisih)||0:t.saldoAkhir-t.saldoSebelumnya;
+  const modalTotal=saved?Number(saved.modal)||0:expenseItems
     .filter(item=>item.category==="modal")
     .reduce((sum,item)=>sum+(Number(item.amount)||0),0);
-  const operasionalTotal=expenseItems
+  const operasionalTotal=saved?Number(saved.operasional)||0:expenseItems
     .filter(item=>item.category==="operasional")
     .reduce((sum,item)=>sum+(Number(item.amount)||0),0);
-  const labaKotor=t.income-modalTotal;
-  const labaBersih=labaKotor-operasionalTotal;
+  const labaKotor=saved?Number(saved.labaKotor)||0:t.income-modalTotal;
+  const labaBersih=saved?Number(saved.labaBersih)||0:labaKotor-operasionalTotal;
 
   const {jsPDF}=window.jspdf;
   const doc=new jsPDF({
@@ -1395,9 +1399,9 @@ document.getElementById("pdfBtn").addEventListener("click",async()=>{
   try{
     const result=await saveCashflowToAPI();
     btn.textContent="MEMBUAT PDF...";
-    createPDF();
-    resetDailyFormAfterSave(collect().saldoAkhir);
-    showToast("Tersimpan • "+result.idHarian);
+    createPDF(result);
+    resetDailyFormAfterSave(Number(result.summary?.saldoAkhir ?? collect().saldoAkhir));
+    showToast("Tersimpan • "+result.jumlahTransaksiHariIni+" transaksi hari ini");
   }catch(err){
     showModal("Gagal menyimpan",err?.message||"Data gagal disimpan ke Google Sheet.","OK");
   }finally{

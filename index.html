@@ -644,7 +644,7 @@ html.show-access-gate #accessGate{display:flex}
     </div>
   </section>
   <div class="actions summary-actions">
-    <button class="pdf-btn" id="pdfBtn">SIMPAN &amp; BUAT PDF F4</button>
+    <button class="pdf-btn" id="pdfBtn">SIMPAN KE DATABASE</button>
     <div class="helper">Draft disinkronkan ke server saat perangkat ini memegang akses edit.</div>
   </div>
 </div></div>
@@ -1145,21 +1145,13 @@ async function completeSuccessfulSave(result){
   setSavePendingLock(false);
   const btn=document.getElementById("pdfBtn");
   btn.disabled=true;
-  btn.textContent="MENYIAPKAN HASIL...";
+  btn.textContent="MENYIMPAN...";
   const saldoAkhir=Number(result.summary?.saldoAkhir ?? collect().saldoAkhir);
   // Reset hanya setelah backend memastikan penyimpanan berhasil, bukan saat respons masih tidak pasti.
   resetDailyFormAfterSave(saldoAkhir);
-  try{
-    btn.textContent="MEMBUAT PDF...";
-    const pdfCreated=createPDF(result);
-    if(pdfCreated)showToast("Tersimpan • "+result.jumlahTransaksiHariIni+" transaksi hari ini");
-    else showModal("Data sudah tersimpan","Database berhasil diperbarui, tetapi PDF belum bisa dibuat karena mesin PDF belum termuat. Buka ikon buku untuk melihat laporan dan mencoba unduh PDF lagi.","OK");
-  }catch(err){
-    showModal("Data sudah tersimpan","Data sudah masuk database, tetapi PDF gagal dibuat. Data tidak akan disimpan ulang. Buka ikon buku untuk melihat laporan dan coba unduh PDF lagi.","OK");
-  }finally{
-    btn.disabled=false;
-    btn.textContent="SIMPAN & BUAT PDF F4";
-  }
+  showToast("Tersimpan • "+result.jumlahTransaksiHariIni+" transaksi hari ini");
+  btn.disabled=false;
+  btn.textContent="SIMPAN KE DATABASE";
 }
 
 async function recoverPendingSave(pending){
@@ -1584,7 +1576,7 @@ document.getElementById("pdfBtn").addEventListener("click",async()=>{
   const syncDifference=syncState();
   const syncTotals=collect();
   if(syncTotals.saldoAkhir<0 || syncDifference!==0){
-    showModal("Saldo belum singkron","Sebelum menyimpan ke database atau membuat PDF, pastikan Saldo Rekening + Cash sama dengan Saldo Operasional Akhir. Periksa kembali bagian STATUS SALDO OTOMATIS.","OK",()=>switchPage("expense"));return;
+    showModal("Saldo belum singkron","Sebelum menyimpan ke database, pastikan Saldo Rekening + Cash sama dengan Saldo Operasional Akhir. Periksa kembali bagian STATUS SALDO OTOMATIS.","OK",()=>switchPage("expense"));return;
   }
   const whatsappAmount=num(document.querySelector('.income-group[data-key="whatsapp"] .money'));
   const whatsappDesc=document.getElementById("whatsappDesc").value.trim();
@@ -1613,7 +1605,7 @@ document.getElementById("pdfBtn").addEventListener("click",async()=>{
     }else{
       localStorage.removeItem(PENDING_SAVE_KEY);
       setSavePendingLock(false);
-      btn.disabled=false;btn.textContent="SIMPAN & BUAT PDF F4";
+      btn.disabled=false;btn.textContent="SIMPAN KE DATABASE";
       showModal("Gagal menyimpan",err?.message||"Data ditolak oleh server. Periksa data lalu coba lagi.","OK");
     }
   }

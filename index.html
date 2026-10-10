@@ -573,7 +573,7 @@ button:active{
   </section>
   <div class="actions summary-actions">
     <button class="pdf-btn" id="pdfBtn">SIMPAN &amp; BUAT PDF F4</button>
-    <div class="helper">Data tersimpan otomatis di browser perangkat ini.</div>
+    <div class="helper">Draft disinkronkan ke server saat perangkat ini memegang akses edit.</div>
   </div>
 </div></div>
 <div class="modal-backdrop" id="modalBackdrop">
@@ -588,6 +588,13 @@ const STORAGE_KEY="cashflow_harian_v1";
 const EXPENSE_CATEGORIES=["modal","operasional","harian","bayareun"];
 let expenseItems=[];
 let editingExpenseIndex=-1;
+
+/* Multi-device state must be initialized BEFORE restore()/refresh()/save() can run. */
+const DEVICE_KEY='cashflow_device_id_v1', SESSION_KEY='cashflow_server_session_v1';
+let deviceId=localStorage.getItem(DEVICE_KEY);
+if(!deviceId){deviceId=(crypto.randomUUID?crypto.randomUUID():('dev-'+Date.now()+'-'+Math.random().toString(36).slice(2)));localStorage.setItem(DEVICE_KEY,deviceId);}
+const deviceLabel=/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)?'HP':'Laptop/Komputer';
+let serverToken=sessionStorage.getItem(SESSION_KEY)||'', hasEditAccess=false, draftRevision=0, draftTimer=null, pollTimer=null, heartbeatTimer=null, pendingLock=null, loadingRemote=false;
 
 const now=new Date();
 const dateKey=[
@@ -1586,10 +1593,7 @@ document.getElementById('navExpense').addEventListener('click',()=>switchPage('e
 
 
 /* ===== MULTI-PERANGKAT: PIN, KUNCI EDIT, DRAFT SERVER ===== */
-const DEVICE_KEY='cashflow_device_id_v1', SESSION_KEY='cashflow_server_session_v1';
-let deviceId=localStorage.getItem(DEVICE_KEY); if(!deviceId){deviceId=(crypto.randomUUID?crypto.randomUUID():('dev-'+Date.now()+'-'+Math.random().toString(36).slice(2)));localStorage.setItem(DEVICE_KEY,deviceId);}
-const deviceLabel=/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)?'HP':'Laptop/Komputer';
-let serverToken=sessionStorage.getItem(SESSION_KEY)||'', hasEditAccess=false, draftRevision=0, draftTimer=null, pollTimer=null, heartbeatTimer=null, pendingLock=null, loadingRemote=false;
+/* Multi-device state is initialized near the top of this script. */
 async function apiCall(payload){const r=await fetch(CASHFLOW_API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({...payload,token:serverToken,deviceId,deviceLabel})});if(!r.ok)throw new Error('Server tidak merespons.');const j=await r.json();if(j.success===false&&!j.conflict)throw new Error(j.message||'Permintaan gagal.');return j;}
 function gateMessage(s){document.getElementById('accessMessage').textContent=s;}
 function gateError(s){document.getElementById('accessError').textContent=s||'';}

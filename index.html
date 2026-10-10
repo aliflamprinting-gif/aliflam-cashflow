@@ -448,6 +448,16 @@ html.show-access-gate #accessGate{display:flex}
 .report-empty{padding:14px 10px;text-align:center;border:1px dashed #4a515e;border-radius:11px;color:#aeb5bf;font-size:12px;line-height:1.5;margin:10px 0}
 .report-error{color:#ff6262;font-size:11px;text-align:center;margin:8px 0}
 
+
+.access-request-overlay{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.78);display:flex;align-items:center;justify-content:center;padding:20px}
+.access-request-overlay[hidden]{display:none!important}
+.access-request-card{width:min(100%,360px);background:#181b21;color:#f5f7fa;border:1px solid #ffe600;border-radius:20px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.55);text-align:center}
+.access-request-title{font-size:18px;font-weight:900;letter-spacing:.4px}
+.access-request-copy{font-size:13px;color:#c4cad3;line-height:1.5;margin:12px 0}
+.access-request-countdown{font-size:14px;color:#ffe600;font-weight:800;margin:14px 0}.access-request-countdown span{font-size:32px;display:inline-block;min-width:36px}
+.access-request-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px}.access-request-actions button{height:46px;border:0;border-radius:11px;font-weight:900;font-size:13px}.access-request-actions button:first-child{background:#3a2024;color:#ff7777;border:1px solid #71363d}.access-request-actions button:last-child{background:#ffe600;color:#151515}
+.access-request-note{font-size:10px;color:#9aa1ab;line-height:1.5;margin-top:12px}
+
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
@@ -461,6 +471,18 @@ html.show-access-gate #accessGate{display:flex}
     <button type="button" class="access-secondary-btn" id="takeOverBtn" hidden>MINTA ALIH AKSES</button>
     <div class="access-error" id="accessError"></div>
     <div class="access-status" id="accessStatus"></div>
+  </div>
+</div>
+<div id="accessRequestModal" class="access-request-overlay" hidden>
+  <div class="access-request-card">
+    <div class="access-request-title">PERMINTAAN AKSES</div>
+    <div class="access-request-copy" id="accessRequestCopy">Perangkat lain ingin menggunakan Cashflow.</div>
+    <div class="access-request-countdown"><span id="accessRequestCountdown">15</span> detik</div>
+    <div class="access-request-actions">
+      <button type="button" id="accessRequestDeny">TOLAK</button>
+      <button type="button" id="accessRequestApprove">IZINKAN</button>
+    </div>
+    <div class="access-request-note">Jika tidak dipilih selama 15 detik, akses otomatis berpindah.</div>
   </div>
 </div>
 <main class="app">
@@ -1928,20 +1950,23 @@ document.getElementById('navIncome').addEventListener('click',()=>switchPage('in
 document.getElementById('navExpense').addEventListener('click',()=>switchPage('expense'));
 
 
-/* ===== MULTI-PERANGKAT: PIN, KUNCI EDIT, DRAFT SERVER ===== */
-/* Multi-device state is initialized near the top of this script. */
+/* ===== AKSES SATU PERANGKAT + DRAFT SERVER ===== */
+let accessRequestTimer=null, activeRequestPollTimer=null, requestCountdownTimer=null, activeRequestId='', activeRequestExpiresAt=0;
 async function apiCall(payload){const r=await fetch(CASHFLOW_API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({...payload,token:serverToken,deviceId,deviceLabel})});if(!r.ok)throw new Error('Server tidak merespons.');const j=await r.json();if(j.success===false&&!j.conflict)throw new Error(j.message||'Permintaan gagal.');return j;}
 function gateMessage(s){document.getElementById('accessMessage').textContent=s;}
 function gateError(s){document.getElementById('accessError').textContent=s||'';}
-function showGate(){document.documentElement.classList.add('show-access-gate');document.getElementById('accessGate').hidden=false;document.querySelector('.app').style.visibility='hidden';document.getElementById('bottomNav').style.visibility='hidden';hasEditAccess=false;pendingLock=null;gateMessage('Masukkan PIN 6 angka untuk membuka Cashflow.');document.getElementById('accessStatus').textContent='Perangkat: '+deviceLabel;document.getElementById('takeOverBtn').hidden=true;}
+function closeAccessRequestModal(){document.getElementById('accessRequestModal').hidden=true;activeRequestId='';activeRequestExpiresAt=0;clearInterval(requestCountdownTimer);requestCountdownTimer=null;}
+function stopSyncLoops(){clearInterval(pollTimer);clearInterval(heartbeatTimer);pollTimer=null;heartbeatTimer=null;}
+function showGate(){stopSyncLoops();clearInterval(accessRequestTimer);accessRequestTimer=null;closeAccessRequestModal();document.documentElement.classList.add('show-access-gate');document.getElementById('accessGate').hidden=false;document.querySelector('.app').style.visibility='hidden';document.getElementById('bottomNav').style.visibility='hidden';hasEditAccess=false;pendingLock=null;gateMessage('Masukkan PIN 6 angka untuk membuka Cashflow.');document.getElementById('accessStatus').textContent='Perangkat: '+deviceLabel;document.getElementById('takeOverBtn').hidden=true;document.getElementById('accessLoginBtn').disabled=false;}
 function hideGate(){document.documentElement.classList.remove('show-access-gate');document.getElementById('accessGate').hidden=true;document.querySelector('.app').style.visibility='';document.getElementById('bottomNav').style.visibility='';}
 function readLocalDraft(){let app={};let tools={};try{app=JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}')}catch(e){}try{tools=JSON.parse(localStorage.getItem(TOOL_STORAGE_KEY)||'{}')}catch(e){}return {tanggal:dateKey,app,tools,page:document.getElementById('expensePage').classList.contains('active')?'expense':'income'};}
-async function syncDraftNow(){if(!hasEditAccess||loadingRemote)return;const draft=readLocalDraft();try{const out=await apiCall({action:'saveDraft',baseRevision:draftRevision,draft});draftRevision=out.revision||draftRevision;}catch(e){if(/Sesi berakhir/.test(e.message)){showGate();gateError(e.message);}else console.warn('Draft belum tersinkron:',e.message);}}
+async function syncDraftNow(){if(!hasEditAccess||loadingRemote)return;const draft=readLocalDraft();try{const out=await apiCall({action:'saveDraft',baseRevision:draftRevision,draft});draftRevision=out.revision||draftRevision;}catch(e){if(/Akses perangkat ini sudah berpindah|Sesi berakhir/.test(e.message)){showGate();gateError('Akses berpindah ke perangkat lain. Masukkan PIN jika ingin meminta akses kembali.');}else console.warn('Draft belum tersinkron:',e.message);}}
 function queueDraftSync(){if(!hasEditAccess||loadingRemote)return;clearTimeout(draftTimer);draftTimer=setTimeout(syncDraftNow,900);}
-async function acquireAfterLogin(){const out=await apiCall({action:'acquireAccess'});hasEditAccess=true;pendingLock=null;hideGate();document.getElementById('accessPin').value='';gateError('');document.getElementById('accessStatus').textContent='';await loadServerDraft();startSyncLoops();return true;}
+async function becomeActiveDevice(){clearInterval(accessRequestTimer);accessRequestTimer=null;pendingLock=null;hasEditAccess=true;closeAccessRequestModal();hideGate();document.getElementById('accessPin').value='';gateError('');document.getElementById('accessStatus').textContent='';await loadServerDraft();if(hasEditAccess)startSyncLoops();return true;}
+async function beginRequestPolling(requestId){clearInterval(accessRequestTimer);accessRequestTimer=setInterval(async()=>{try{const out=await apiCall({action:'checkAccessRequest',requestId});if(out.status==='approved'||out.hasAccess){clearInterval(accessRequestTimer);accessRequestTimer=null;await becomeActiveDevice();}else if(out.status==='denied'){clearInterval(accessRequestTimer);accessRequestTimer=null;pendingLock=null;document.getElementById('accessLoginBtn').disabled=false;gateMessage('Permintaan akses ditolak.');gateError(out.message||'Perangkat aktif menolak permintaan.');document.getElementById('accessStatus').textContent='Perangkat: '+deviceLabel;} }catch(e){console.warn('Status permintaan akses:',e.message)}},1000);}
+async function acquireAfterLogin(){const out=await apiCall({action:'acquireAccess'});if(out.acquired||out.hasAccess){return becomeActiveDevice();}if(out.pending){pendingLock={requestId:out.requestId};gateMessage('Permintaan akses dikirim ke '+(out.activeDeviceLabel||'perangkat aktif')+'.');gateError('Menunggu persetujuan selama maksimal 15 detik. Jika tidak ada respons, akses otomatis diberikan.');document.getElementById('accessStatus').textContent='Permintaan akses sedang menunggu…';document.getElementById('accessLoginBtn').disabled=true;beginRequestPolling(out.requestId);return false;}throw new Error(out.message||'Tidak bisa meminta akses.');}
 async function loadServerDraft(){
-  loadingRemote=true;
-  let loadedRemoteDraft=false;
+  loadingRemote=true;let loadedRemoteDraft=false;
   try{
     const out=await apiCall({action:'getDraft',tanggal:dateKey});
     draftRevision=Number(out.revision||(out.draft&&out.draft.revision))||0;
@@ -1951,37 +1976,39 @@ async function loadServerDraft(){
         localStorage.setItem(STORAGE_KEY,JSON.stringify(out.draft.app||{}));
         localStorage.setItem(TOOL_STORAGE_KEY,JSON.stringify(out.draft.tools||{}));
         sessionStorage.setItem('cashflow_loaded_draft',marker);
-        location.reload();
-        return;
+        location.reload();return;
       }
       loadedRemoteDraft=true;
     }
-    // Selalu cek saldo dari DATA HARIAN, termasuk ketika draft server ditemukan.
-    // Draft lama dengan saldo 0/kosong tidak boleh menimpa saldo akhir database.
     const balance=await apiCall({action:'getLatestBalance',tanggal:dateKey});
-    const saldoDatabase=Number(balance.saldoAkhir)||0;
-    let app={};
+    const saldoDatabase=Number(balance.saldoAkhir)||0;let app={};
     try{app=JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}')}catch(e){}
-    if(app.date!==dateKey) app={date:dateKey};
+    if(app.date!==dateKey)app={date:dateKey};
     const saldoDraft=Number(String(app.saldoSebelumnya||'').replace(/[^\d-]/g,''))||0;
-    if(!loadedRemoteDraft || !String(app.saldoSebelumnya||'').trim() || saldoDraft===0){
-      app.saldoSebelumnya=saldoDatabase.toLocaleString('id-ID');
-      localStorage.setItem(STORAGE_KEY,JSON.stringify(app));
-      document.getElementById('saldoSebelumnya').value=app.saldoSebelumnya;
-      // Jangan mengubah input transaksi atau data draft lainnya.
-      refresh();
+    if(!loadedRemoteDraft||!String(app.saldoSebelumnya||'').trim()||saldoDraft===0){
+      app.saldoSebelumnya=saldoDatabase.toLocaleString('id-ID');localStorage.setItem(STORAGE_KEY,JSON.stringify(app));
+      document.getElementById('saldoSebelumnya').value=app.saldoSebelumnya;refresh();
     }
-  }finally{
-    loadingRemote=false;
-  }
-  // Buat draft server pertama dari saldo database terbaru jika belum ada draft aktif.
-  if(!loadedRemoteDraft) queueDraftSync();
+  }finally{loadingRemote=false;}
+  if(!loadedRemoteDraft)queueDraftSync();
 }
-function startSyncLoops(){clearInterval(pollTimer);clearInterval(heartbeatTimer);pollTimer=setInterval(async()=>{if(!hasEditAccess)return;try{await apiCall({action:'heartbeat'});}catch(e){if(/Sesi berakhir/.test(e.message)){showGate();gateError(e.message);clearInterval(pollTimer);clearInterval(heartbeatTimer);}else console.warn(e.message)}},60000);heartbeatTimer=setInterval(()=>{if(hasEditAccess)syncDraftNow()},15000);}
+function showAccessRequest(req){
+  if(!req||!req.requestId||!hasEditAccess)return;
+  if(activeRequestId===req.requestId)return;
+  activeRequestId=req.requestId;activeRequestExpiresAt=Number(req.expiresAt)||Date.now()+15000;
+  document.getElementById('accessRequestCopy').textContent=(req.deviceLabel||'Perangkat lain')+' ingin menggunakan Cashflow. Jika diizinkan, akses edit di perangkat ini akan berpindah.';
+  document.getElementById('accessRequestModal').hidden=false;
+  clearInterval(requestCountdownTimer);
+  const tick=()=>{const left=Math.max(0,Math.ceil((activeRequestExpiresAt-Date.now())/1000));document.getElementById('accessRequestCountdown').textContent=String(left);if(left<=0)document.getElementById('accessRequestModal').hidden=true;};tick();requestCountdownTimer=setInterval(tick,250);
+}
+async function respondToAccessRequest(decision){const id=activeRequestId;if(!id)return;document.getElementById('accessRequestApprove').disabled=true;document.getElementById('accessRequestDeny').disabled=true;try{const out=await apiCall({action:'respondAccess',requestId:id,decision});closeAccessRequestModal();if(out.approved||out.timedOut){showGate();gateError('Akses sudah berpindah ke perangkat lain.');}else if(out.handled){document.getElementById('accessStatus').textContent='Permintaan akses ditolak.';}}catch(e){gateError(e.message);}finally{document.getElementById('accessRequestApprove').disabled=false;document.getElementById('accessRequestDeny').disabled=false;}}
+document.getElementById('accessRequestApprove').addEventListener('click',()=>respondToAccessRequest('approve'));
+document.getElementById('accessRequestDeny').addEventListener('click',()=>respondToAccessRequest('deny'));
+function startSyncLoops(){stopSyncLoops();pollTimer=setInterval(async()=>{if(!hasEditAccess)return;try{const out=await apiCall({action:'heartbeat'});if(!out.hasAccess){showGate();gateError('Akses berpindah ke perangkat lain.');return;}if(out.accessRequest)showAccessRequest(out.accessRequest);else if(activeRequestId)closeAccessRequestModal();}catch(e){if(/Akses perangkat ini sudah berpindah|Sesi berakhir/.test(e.message)){showGate();gateError('Akses berpindah ke perangkat lain.');}else console.warn(e.message)}},5000);heartbeatTimer=setInterval(()=>{if(hasEditAccess)syncDraftNow()},15000);}
 document.getElementById('accessPin').addEventListener('input',e=>{e.target.value=e.target.value.replace(/\D/g,'').slice(0,6);});
-document.getElementById('accessLoginBtn').addEventListener('click',async()=>{const pin=document.getElementById('accessPin').value;if(!/^\d{6}$/.test(pin)){gateError('Masukkan PIN tepat 6 angka.');return;}const btn=document.getElementById('accessLoginBtn');btn.disabled=true;gateError('Memeriksa PIN...');try{const out=await fetch(CASHFLOW_API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'login',pin,deviceId,deviceLabel})}).then(r=>r.json());if(!out.success)throw new Error(out.message||'PIN salah.');serverToken=out.token;localStorage.setItem(SESSION_KEY,serverToken);await acquireAfterLogin(false);}catch(e){gateError(e.message||'Login gagal.');}finally{btn.disabled=false;}});
+document.getElementById('accessLoginBtn').addEventListener('click',async()=>{const pin=document.getElementById('accessPin').value;if(!/^\d{6}$/.test(pin)){gateError('Masukkan PIN tepat 6 angka.');return;}const btn=document.getElementById('accessLoginBtn');btn.disabled=true;gateError('Memeriksa PIN...');try{const out=await fetch(CASHFLOW_API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'login',pin,deviceId,deviceLabel})}).then(r=>r.json());if(!out.success)throw new Error(out.message||'PIN salah.');serverToken=out.token;localStorage.setItem(SESSION_KEY,serverToken);await acquireAfterLogin();}catch(e){gateError(e.message||'Login gagal.');btn.disabled=false;}});
 document.getElementById('takeOverBtn').hidden=true;
-async function bootAccess(){if(!serverToken){showGate();return;}try{await apiCall({action:'heartbeat'});hasEditAccess=true;hideGate();await loadServerDraft();startSyncLoops();}catch(e){serverToken='';localStorage.removeItem(SESSION_KEY);showGate();gateError('Sesi tidak valid. Masukkan PIN kembali.');}}
+async function bootAccess(){if(!serverToken){showGate();return;}try{const out=await apiCall({action:'heartbeat'});if(!out.hasAccess){showGate();gateError('Perangkat ini tidak sedang memegang akses. Masukkan PIN untuk meminta akses.');return;}hasEditAccess=true;hideGate();await loadServerDraft();if(hasEditAccess)startSyncLoops();}catch(e){serverToken='';localStorage.removeItem(SESSION_KEY);showGate();gateError('Sesi tidak valid. Masukkan PIN kembali.');}}
 
 loadToolState();
 syncState();

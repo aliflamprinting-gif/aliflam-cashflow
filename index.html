@@ -1620,17 +1620,19 @@ async function loadServerDraft(){
       }
       loadedRemoteDraft=true;
     }
-    if(!loadedRemoteDraft){
-      // Tidak ada draft aktif: gunakan saldo akhir terbaru dari DATA HARIAN.
-      const balance=await apiCall({action:'getLatestBalance',tanggal:dateKey});
-      const saldo=Number(balance.saldoAkhir)||0;
-      let app={};
-      try{app=JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}')}catch(e){}
-      if(app.date!==dateKey) app={date:dateKey};
-      app.saldoSebelumnya=saldo.toLocaleString('id-ID');
+    // Selalu cek saldo dari DATA HARIAN, termasuk ketika draft server ditemukan.
+    // Draft lama dengan saldo 0/kosong tidak boleh menimpa saldo akhir database.
+    const balance=await apiCall({action:'getLatestBalance',tanggal:dateKey});
+    const saldoDatabase=Number(balance.saldoAkhir)||0;
+    let app={};
+    try{app=JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}')}catch(e){}
+    if(app.date!==dateKey) app={date:dateKey};
+    const saldoDraft=Number(String(app.saldoSebelumnya||'').replace(/[^\d-]/g,''))||0;
+    if(!loadedRemoteDraft || !String(app.saldoSebelumnya||'').trim() || saldoDraft===0){
+      app.saldoSebelumnya=saldoDatabase.toLocaleString('id-ID');
       localStorage.setItem(STORAGE_KEY,JSON.stringify(app));
       document.getElementById('saldoSebelumnya').value=app.saldoSebelumnya;
-      // Terapkan hanya saldo awal; input lokal lain tetap dipertahankan jika ada.
+      // Jangan mengubah input transaksi atau data draft lainnya.
       refresh();
     }
   }finally{

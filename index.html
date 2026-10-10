@@ -1777,7 +1777,6 @@ function renderDatabaseReport(data,isToday){
     ["TOTAL PEMASUKAN",totals.pemasukan,"#35c76f"],
     ["TOTAL PENGELUARAN",totals.totalPengeluaran,"#ff6262"],
     ["LABA KOTOR",totals.labaKotor,"#ffe600"],
-    ["LABA HARIAN",totals.labaHarian,"#ffb74d"],
     ["LABA BERSIH",totals.labaBersih,"#4b9cff"]
   ].map(x=>'<div class="report-total"><span>'+x[0]+'</span><b style="color:'+x[2]+'">'+reportMoney(x[1])+'</b>'+(profitNotes[x[0]]?'<small class="report-total-note">'+profitNotes[x[0]]+'</small>':'')+'</div>').join("")+'</div>';
   const conditionValue=Number(totals.labaHarian)||0;
@@ -1835,7 +1834,7 @@ function createDatabaseReportPDF(data){
     y=32;
   };
   const ensure=height=>{if(y+height>H-18){doc.addPage();pageHeading();}};
-  const sectionTitle=title=>{ensure(10);text(title,M,y,9,true,black);y+=4.5;};
+  const sectionTitle=title=>{ensure(12);text(title,M,y,9,true,black);y+=7.5;};
   const line=(label,value,color=black)=>{ensure(7);text(label,M,y,7.8,false,gray);text(fmt(value),W-M,y,7.8,true,color,{align:"right"});doc.setDrawColor(...lineColor);doc.line(M,y+2,W-M,y+2);y+=7;};
   const row=(label,value,color=black)=>{ensure(7);doc.setDrawColor(...lineColor);doc.rect(M,y,CW,6.5);text(label,M+2,y+4.4,7.5,false,gray);doc.setFont("helvetica","bold");doc.setFontSize(7.5);doc.setTextColor(...color);doc.text(fmt(value),W-M-2,y+4.4,{align:"right"});y+=6.5;};
   const categorySums={MODAL:0,OPERASIONAL:0,HARIAN:0,BAYAREUN:0};
@@ -1864,23 +1863,23 @@ function createDatabaseReportPDF(data){
     ["LABA HARIAN","Rumus: Pemasukan − Modal − Operasional − Harian − Bayareun"],
     ["LABA BERSIH","Rumus: Pemasukan − Modal − Operasional"]
   ];
-  y+=1;
-  formulaNotes.forEach(note=>{ensure(5);text(note[0]+" • "+note[1],M+1,y,6.4,false,gray);y+=4;});
-  y+=1;
+  y+=3;
+  formulaNotes.forEach(note=>{ensure(6);text(note[0]+" • "+note[1],M+1,y,6.4,false,gray);y+=4.2;});
+  y+=3;
   sectionTitle("REKAP PENGELUARAN PER KATEGORI");
   [["MODAL",cats.MODAL],["OPERASIONAL",cats.OPERASIONAL],["HARIAN",cats.HARIAN],["BAYAREUN",cats.BAYAREUN]].forEach(r=>row(r[0],r[1],red));
   const conditionAmount=Number(totals.labaHarian)||0;
   const conditionLabel=conditionAmount>0?"PLUS":conditionAmount<0?"MINUS":"IMPAS";
   const conditionColor=conditionLabel==="PLUS"?green:conditionLabel==="MINUS"?red:yellow;
-  y+=1;
+  y+=3;
   sectionTitle("KONDISI HARI INI");
-  ensure(15);
-  doc.setDrawColor(...conditionColor);doc.setFillColor(248,249,250);doc.roundedRect(M,y,CW,13,2,2,"FD");
-  text(conditionLabel,M+3,y+5,8.5,true,conditionColor);
+  ensure(18);
+  doc.setDrawColor(...conditionColor);doc.setFillColor(248,249,250);doc.roundedRect(M,y,CW,14,2,2,"FD");
+  text(conditionLabel,M+3,y+5.2,8.5,true,conditionColor);
   const conditionAmountText=(conditionAmount>0?"+":conditionAmount<0?"−":"")+fmt(Math.abs(conditionAmount));
-  text(conditionAmountText,W-M-3,y+5,9,true,conditionColor,{align:"right"});
-  text(conditionAmount>0?"Surplus setelah seluruh biaya harian diperhitungkan.":conditionAmount<0?"Kekurangan setelah seluruh biaya harian diperhitungkan.":"Pemasukan dan pengeluaran seimbang.",M+3,y+10,6.5,false,gray);
-  y+=17;
+  text(conditionAmountText,W-M-5,y+5.2,8.5,true,conditionColor,{align:"right"});
+  text(conditionAmount>0?"Surplus setelah seluruh biaya harian diperhitungkan.":conditionAmount<0?"Kekurangan setelah seluruh biaya harian diperhitungkan.":"Pemasukan dan pengeluaran seimbang.",M+3,y+10.5,6.5,false,gray);
+  y+=19;
   if(!daily.length && !tx.length){ensure(10);text("Belum ada data tersimpan pada tanggal/periode ini.",M,y,8,false,gray);y+=10;}
   if(data.mode==="range"){
     y+=4;sectionTitle("RINCIAN PER HARI");
@@ -1898,7 +1897,7 @@ function createDatabaseReportPDF(data){
   }
 
   // DAFTAR TRANSAKSI dengan header berulang saat berpindah halaman.
-  y+=1;sectionTitle("DAFTAR TRANSAKSI");
+  y+=3;sectionTitle("DAFTAR TRANSAKSI");
   const drawTxHeader=()=>{
     doc.setFillColor(...black);doc.rect(M,y,CW,7,"F");
     text("NO",M+2,y+4.8,6.7,true,[255,255,255]);

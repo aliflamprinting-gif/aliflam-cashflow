@@ -410,6 +410,44 @@ button:active{
 html.show-access-gate #accessGate{display:flex}
 #accessGate[hidden]{display:none!important}.access-card{width:min(100%,380px);background:#181b21;border:1px solid #343a44;border-radius:22px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.4)}
 .access-title{text-align:center;font-size:22px;font-weight:900;margin-bottom:8px}.access-sub{text-align:center;color:#aeb5bf;font-size:13px;line-height:1.5;margin-bottom:18px}.access-input{padding:0 14px!important;text-align:center;letter-spacing:8px;font-size:24px!important;font-weight:900}.access-main-btn{width:100%;height:48px;margin-top:12px;border:0;border-radius:12px;background:#f5f5f5;color:#111;font-weight:900;font-size:14px}.access-secondary-btn{width:100%;height:42px;margin-top:8px;border:1px solid #343a44;border-radius:12px;background:#22262e;color:#fff;font-weight:800}.access-error{color:#ff6262;font-size:12px;line-height:1.5;margin-top:12px;text-align:center;white-space:pre-wrap}.access-status{font-size:12px;color:#ffe600;text-align:center;margin-top:12px;line-height:1.5}
+
+/* ===== LAPORAN DATABASE ===== */
+.header-report-wrap{position:absolute;right:12px;top:50%;transform:translateY(-50%);z-index:200}
+.header-report-btn{width:42px;height:42px;border:1px solid #343a44;border-radius:12px;background:#22262e;color:#fff;font-size:21px;display:flex;align-items:center;justify-content:center}
+.report-menu{position:absolute;right:0;top:48px;width:220px;padding:9px;display:none;flex-direction:column;gap:8px;background:#181b21;border:1px solid #343a44;border-radius:15px;box-shadow:0 12px 35px rgba(0,0,0,.35)}
+.report-menu.show{display:flex}
+.report-menu button{height:42px;border:1px solid #343a44;border-radius:10px;background:#22262e;color:#f5f7fa;font-size:11px;font-weight:900}
+.report-modal{max-height:86vh;overflow:auto;width:min(100%,410px)}
+.report-heading{text-align:center;font-size:17px;font-weight:900;margin:2px 0 6px}
+.report-sub{text-align:center;color:#9aa1ab;font-size:11px;margin-bottom:12px}
+.report-tabs{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:12px 0}
+.report-tabs button,.report-action{height:40px;border:1px solid #343a44;border-radius:10px;background:#22262e;color:#aeb5bf;font-size:11px;font-weight:900}
+.report-tabs button.active{background:#f5f5f5;color:#111;border-color:#f5f5f5}
+.report-date-fields{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}
+.report-date-fields.single{grid-template-columns:1fr}
+.report-date-fields label{font-size:10px}
+.report-date-fields input{padding:0 8px;height:42px;font-size:13px}
+.report-action.primary{background:#f5f5f5;color:#111;border-color:#f5f5f5}
+.report-action:disabled{opacity:.45;cursor:not-allowed}
+.report-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:13px}
+.report-actions .back-action{grid-column:1/-1}
+.report-balance-cards{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}
+.report-balance-card{border:1px solid #343a44;border-radius:12px;padding:11px 8px;background:#22262e;text-align:center}
+.report-balance-card span{display:block;color:#9aa1ab;font-size:9px;font-weight:900}
+.report-balance-card b{display:block;color:#4b9cff;font-size:15px;margin-top:5px;overflow-wrap:anywhere}
+.report-total-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:10px 0}
+.report-total{border:1px solid #343a44;border-radius:10px;padding:9px;background:#181b21}
+.report-total span{display:block;color:#9aa1ab;font-size:9px;font-weight:900}
+.report-total b{display:block;font-size:13px;margin-top:4px}
+.report-group{border:1px solid #343a44;border-radius:11px;overflow:hidden;margin:10px 0}
+.report-group-title{padding:9px 10px;background:#22262e;color:#ffe600;font-size:11px;font-weight:900;display:flex;justify-content:space-between;gap:8px}
+.report-row{display:flex;justify-content:space-between;gap:9px;padding:8px 10px;border-top:1px solid #2b3038;font-size:11px}
+.report-row span:first-child{min-width:0;overflow-wrap:anywhere}
+.report-row b{white-space:nowrap}
+.report-day-title{font-size:12px;font-weight:900;margin:15px 0 6px;color:#ffe600}
+.report-empty{padding:14px 10px;text-align:center;border:1px dashed #4a515e;border-radius:11px;color:#aeb5bf;font-size:12px;line-height:1.5;margin:10px 0}
+.report-error{color:#ff6262;font-size:11px;text-align:center;margin:8px 0}
+
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
@@ -436,6 +474,13 @@ html.show-access-gate #accessGate{display:flex}
       </div>
     </div>
     <div class="title">CASHFLOW HARIAN</div>
+    <div class="header-report-wrap">
+      <button type="button" class="header-report-btn" id="reportBtn" aria-label="Buku catatan" title="Laporan">▤</button>
+      <div class="report-menu" id="reportMenu">
+        <button type="button" id="menuTodayReport">📒 DATA HARI INI</button>
+        <button type="button" id="menuFullReport">📊 LIHAT LAPORAN LENGKAP</button>
+      </div>
+    </div>
   </header>
 
   <div class="content">
@@ -574,6 +619,26 @@ html.show-access-gate #accessGate{display:flex}
   <div class="actions summary-actions">
     <button class="pdf-btn" id="pdfBtn">SIMPAN &amp; BUAT PDF F4</button>
     <div class="helper">Draft disinkronkan ke server saat perangkat ini memegang akses edit.</div>
+  </div>
+</div></div>
+<div class="modal-backdrop" id="reportBackdrop"><div class="modal report-modal">
+  <button type="button" class="popup-close" id="reportPopupClose" aria-label="Tutup">×</button>
+  <div class="report-heading" id="reportHeading">DATA HARI INI</div>
+  <div class="report-sub" id="reportSub">Data final yang sudah tersimpan di database</div>
+  <div id="reportControls" hidden>
+    <div class="report-tabs">
+      <button type="button" id="reportTabSingle" class="active">SATU TANGGAL</button>
+      <button type="button" id="reportTabRange">RENTANG TANGGAL</button>
+    </div>
+    <div class="report-date-fields single" id="reportDateFields"></div>
+    <div class="report-actions" style="margin-top:8px">
+      <button type="button" class="report-action primary" id="reportLoadBtn" style="grid-column:1/-1">LIHAT LAPORAN</button>
+    </div>
+  </div>
+  <div id="reportBody"></div>
+  <div class="report-actions" id="reportResultActions" hidden>
+    <button type="button" class="report-action primary" id="reportPdfBtn">UNDUH PDF F4</button>
+    <button type="button" class="report-action back-action" id="reportBackBtn">KEMBALI</button>
   </div>
 </div></div>
 <div class="modal-backdrop" id="modalBackdrop">
@@ -1034,7 +1099,10 @@ async function saveCashflowToAPI(){
       totalPengeluaran:t.expense,
       saldoAkhir:t.saldoAkhir,
       status,
-      selisih
+      selisih,
+      syncSaldo:moneyInputValue("syncSaldo"),
+      syncCash:moneyInputValue("syncCash"),
+      statusSinkron:(syncState()===0 && t.saldoAkhir>=0)
     },
     transactions
   };
@@ -1112,8 +1180,7 @@ function row(label,value){
 
 function createPDF(saveResult){
   if(!window.jspdf || !window.jspdf.jsPDF){
-    showModal("PDF belum siap","Mesin PDF belum termuat. Pastikan koneksi internet aktif lalu refresh halaman.","OK");
-    return;
+    return false;
   }
 
   const ir=incomeRows(), er=expenseRows();
@@ -1397,9 +1464,16 @@ function createPDF(saveResult){
 
   const filename="Cashflow_Harian_"+dateKey.replace(/[^0-9-]/g,"")+".pdf";
   doc.save(filename);
+  return true;
 }
 
 document.getElementById("pdfBtn").addEventListener("click",async()=>{
+  const syncDifference=syncState();
+  const syncTotals=collect();
+  if(syncTotals.saldoAkhir<0 || syncDifference!==0){
+    showModal("Saldo belum singkron","Sebelum menyimpan ke database atau membuat PDF, pastikan Saldo Rekening + Cash sama dengan Saldo Operasional Akhir. Periksa kembali bagian STATUS SALDO OTOMATIS.","OK",()=>switchPage("expense"));
+    return;
+  }
   const whatsappAmount=num(document.querySelector('.income-group[data-key="whatsapp"] .money'));
   const whatsappDesc=document.getElementById("whatsappDesc").value.trim();
   if(whatsappAmount>0&&!whatsappDesc){
@@ -1431,9 +1505,13 @@ document.getElementById("pdfBtn").addEventListener("click",async()=>{
   try{
     const result=await saveCashflowToAPI();
     btn.textContent="MEMBUAT PDF...";
-    createPDF(result);
+    const pdfCreated=createPDF(result);
     resetDailyFormAfterSave(Number(result.summary?.saldoAkhir ?? collect().saldoAkhir));
-    showToast("Tersimpan • "+result.jumlahTransaksiHariIni+" transaksi hari ini");
+    if(pdfCreated){
+      showToast("Tersimpan • "+result.jumlahTransaksiHariIni+" transaksi hari ini");
+    }else{
+      showModal("Data sudah tersimpan","Database berhasil diperbarui, tetapi PDF belum bisa dibuat karena mesin PDF belum termuat. Buka ikon buku untuk melihat laporan dan mencoba unduh PDF lagi.","OK");
+    }
   }catch(err){
     showModal("Gagal menyimpan",err?.message||"Data gagal disimpan ke Google Sheet.","OK");
   }finally{
@@ -1441,6 +1519,248 @@ document.getElementById("pdfBtn").addEventListener("click",async()=>{
     btn.textContent=originalText;
   }
 });
+
+
+/* ===== LAPORAN READ-ONLY DARI DATABASE ===== */
+let reportMode="today";
+let reportTab="single";
+let lastReportData=null;
+const reportMenu=document.getElementById("reportMenu");
+document.getElementById("reportBtn").addEventListener("click",e=>{
+  e.stopPropagation();
+  reportMenu.classList.toggle("show");
+});
+reportMenu.addEventListener("click",e=>e.stopPropagation());
+document.addEventListener("click",()=>reportMenu.classList.remove("show"));
+document.getElementById("menuTodayReport").addEventListener("click",()=>openTodayReport());
+document.getElementById("menuFullReport").addEventListener("click",()=>openFullReport());
+document.getElementById("reportPopupClose").addEventListener("click",closeReport);
+document.getElementById("reportBackdrop").addEventListener("click",e=>{if(e.target.id==="reportBackdrop")closeReport();});
+document.getElementById("reportBackBtn").addEventListener("click",closeReport);
+document.getElementById("reportTabSingle").addEventListener("click",()=>setReportTab("single"));
+document.getElementById("reportTabRange").addEventListener("click",()=>setReportTab("range"));
+document.getElementById("reportLoadBtn").addEventListener("click",loadSelectedReport);
+document.getElementById("reportPdfBtn").addEventListener("click",()=>{
+  if(!lastReportData){showModal("Laporan belum tersedia","Tampilkan laporan terlebih dahulu.","OK");return;}
+  if(!window.jspdf?.jsPDF){showModal("PDF belum siap","Mesin PDF belum termuat. Periksa koneksi internet lalu muat ulang halaman.","OK");return;}
+  createDatabaseReportPDF(lastReportData);
+});
+
+function openReportModal(){
+  reportMenu.classList.remove("show");
+  document.getElementById("reportBackdrop").classList.add("show");
+  lockModalScroll();
+}
+function closeReport(){
+  document.getElementById("reportBackdrop").classList.remove("show");
+  unlockModalScroll();
+}
+function openTodayReport(){
+  reportMode="today";
+  document.getElementById("reportHeading").textContent="DATA HARI INI";
+  document.getElementById("reportSub").textContent="Hanya transaksi final yang sudah tersimpan di database";
+  document.getElementById("reportControls").hidden=true;
+  document.getElementById("reportResultActions").hidden=false;
+  document.getElementById("reportBody").innerHTML='<div class="report-empty">Memuat data dari database...</div>';
+  openReportModal();
+  fetchReport(dateKey,dateKey).then(data=>{
+    lastReportData={...data,from:dateKey,to:dateKey,mode:"single"};
+    renderDatabaseReport(lastReportData,true);
+  }).catch(err=>{
+    document.getElementById("reportBody").innerHTML='<div class="report-error">'+escapeHTML(err.message||"Laporan gagal dimuat.")+'</div>';
+  });
+}
+function openFullReport(){
+  reportMode="full";
+  reportTab="single";
+  document.getElementById("reportHeading").textContent="LIHAT LAPORAN LENGKAP";
+  document.getElementById("reportSub").textContent="Pilih satu tanggal atau rentang tanggal";
+  document.getElementById("reportControls").hidden=false;
+  document.getElementById("reportResultActions").hidden=true;
+  document.getElementById("reportBody").innerHTML="";
+  document.getElementById("reportDate").value=dateKey;
+  setReportTab("single");
+  openReportModal();
+}
+function setReportTab(tab){
+  reportTab=tab;
+  document.getElementById("reportTabSingle").classList.toggle("active",tab==="single");
+  document.getElementById("reportTabRange").classList.toggle("active",tab==="range");
+  const fields=document.getElementById("reportDateFields");
+  fields.classList.toggle("single",tab==="single");
+  fields.innerHTML=tab==="single"
+    ? '<div><label for="reportDate">Tanggal laporan</label><input type="date" id="reportDate" value="'+dateKey+'"></div>'
+    : '<div><label for="reportFrom">Dari tanggal</label><input type="date" id="reportFrom" value="'+dateKey+'"></div><div><label for="reportTo">Sampai tanggal</label><input type="date" id="reportTo" value="'+dateKey+'"></div>';
+  document.getElementById("reportResultActions").hidden=true;
+  document.getElementById("reportBody").innerHTML="";
+  lastReportData=null;
+}
+async function fetchReport(from,to){
+  if(!hasEditAccess) throw new Error("Sesi Cashflow tidak aktif. Masuk kembali untuk membuka laporan.");
+  const out=await apiCall({action:"getReport",from,to});
+  if(!out.success)throw new Error(out.message||"Laporan gagal dimuat.");
+  return {daily:Array.isArray(out.daily)?out.daily:[],transactions:Array.isArray(out.transactions)?out.transactions:[],from,to};
+}
+async function loadSelectedReport(){
+  const btn=document.getElementById("reportLoadBtn");
+  let from,to;
+  if(reportTab==="single"){
+    from=document.getElementById("reportDate").value;
+    to=from;
+  }else{
+    from=document.getElementById("reportFrom").value;
+    to=document.getElementById("reportTo").value;
+  }
+  if(!from||!to){showModal("Tanggal diperlukan","Pilih tanggal laporan terlebih dahulu.","OK");return;}
+  if(from>to){showModal("Rentang tanggal tidak valid","Tanggal awal tidak boleh melewati tanggal akhir.","OK");return;}
+  btn.disabled=true;btn.textContent="MEMUAT LAPORAN...";
+  document.getElementById("reportBody").innerHTML='<div class="report-empty">Mengambil data tersimpan...</div>';
+  try{
+    const data=await fetchReport(from,to);
+    data.mode=reportTab;
+    lastReportData=data;
+    renderDatabaseReport(data,false);
+    document.getElementById("reportResultActions").hidden=false;
+  }catch(err){
+    lastReportData=null;
+    document.getElementById("reportBody").innerHTML='<div class="report-error">'+escapeHTML(err.message||"Laporan gagal dimuat.")+'</div>';
+    document.getElementById("reportResultActions").hidden=true;
+  }finally{btn.disabled=false;btn.textContent="LIHAT LAPORAN";}
+}
+function reportMoney(value){return (Number(value)<0?"-":"")+"Rp "+Math.abs(Number(value)||0).toLocaleString("id-ID");}
+function reportDateLabel(iso){
+  if(!iso)return "-";
+  const d=new Date(iso+"T12:00:00");
+  return new Intl.DateTimeFormat("id-ID",{day:"2-digit",month:"long",year:"numeric"}).format(d);
+}
+function reportTotals(data){
+  const daily=data.daily||[];
+  const tx=data.transactions||[];
+  const total={pemasukan:0,modal:0,operasional:0,harian:0,bayareun:0,labaKotor:0,labaBersih:0,totalPengeluaran:0,saldoAwal:0,saldoAkhir:0};
+  if(daily.length){
+    total.saldoAwal=Number(daily[0].saldoAwal)||0;
+    total.saldoAkhir=Number(daily[daily.length-1].saldoAkhir)||0;
+    daily.forEach(d=>{
+      total.pemasukan+=Number(d.pemasukan)||0;
+      total.modal+=Number(d.modal)||0;
+      total.operasional+=Number(d.operasional)||0;
+      total.labaKotor+=Number(d.labaKotor)||0;
+      total.labaBersih+=Number(d.labaBersih)||0;
+      total.totalPengeluaran+=Number(d.totalPengeluaran)||0;
+    });
+  }else{
+    tx.forEach(t=>{
+      const n=Number(t.nominal)||0;
+      if(t.tipe==="PEMASUKAN")total.pemasukan+=n;
+      else if(t.kategori==="MODAL")total.modal+=n;
+      else if(t.kategori==="OPERASIONAL")total.operasional+=n;
+      else if(t.kategori==="HARIAN")total.harian+=n;
+      else if(t.kategori==="BAYAREUN")total.bayareun+=n;
+      if(t.tipe==="PENGELUARAN")total.totalPengeluaran+=n;
+    });
+    total.labaKotor=total.pemasukan-total.modal;
+    total.labaBersih=total.labaKotor-total.operasional;
+  }
+  return total;
+}
+function renderDatabaseReport(data,isToday){
+  const daily=(data.daily||[]).slice().sort((a,b)=>a.tanggal.localeCompare(b.tanggal));
+  const tx=(data.transactions||[]).slice().sort((a,b)=>String(b.dibuatPada||"").localeCompare(String(a.dibuatPada||"")));
+  const totals=reportTotals({...data,daily});
+  const noData=daily.length===0;
+  const balance='<div class="report-balance-cards"><div class="report-balance-card"><span>SALDO AWAL</span><b>'+reportMoney(totals.saldoAwal)+'</b></div><div class="report-balance-card"><span>SALDO AKHIR</span><b>'+reportMoney(totals.saldoAkhir)+'</b></div></div>';
+  const totalGrid='<div class="report-total-grid">'+[
+    ["TOTAL PEMASUKAN",totals.pemasukan,"#35c76f"],
+    ["TOTAL PENGELUARAN",totals.totalPengeluaran,"#ff6262"],
+    ["LABA KOTOR",totals.labaKotor,"#ffe600"],
+    ["LABA BERSIH",totals.labaBersih,"#4b9cff"]
+  ].map(x=>'<div class="report-total"><span>'+x[0]+'</span><b style="color:'+x[2]+'">'+reportMoney(x[1])+'</b></div>').join("")+'</div>';
+  let markup=balance+totalGrid;
+  if(noData)markup+='<div class="report-empty">Belum ada data tersimpan pada tanggal/periode ini.<br>Nilai ringkasan ditampilkan Rp0.</div>';
+  const categories=["MODAL","OPERASIONAL","HARIAN","BAYAREUN"];
+  const expenseSums={MODAL:0,OPERASIONAL:0,HARIAN:0,BAYAREUN:0};
+  tx.forEach(t=>{if(t.tipe==="PENGELUARAN"&&expenseSums[t.kategori]!==undefined)expenseSums[t.kategori]+=Number(t.nominal)||0;});
+  markup+='<div class="report-group"><div class="report-group-title"><span>RINGKASAN PENGELUARAN</span><span>'+reportMoney(totals.totalPengeluaran)+'</span></div>';
+  categories.forEach(cat=>{markup+='<div class="report-row"><span>'+cat+'</span><b>'+reportMoney(expenseSums[cat])+'</b></div>';});
+  markup+='</div>';
+  if(!isToday && daily.length>1){
+    daily.forEach(d=>{
+      markup+='<div class="report-day-title">'+escapeHTML(reportDateLabel(d.tanggal))+'</div><div class="report-group">';
+      [["Saldo awal",d.saldoAwal],["Pemasukan",d.pemasukan],["Modal",d.modal],["Laba kotor",d.labaKotor],["Operasional",d.operasional],["Laba bersih",d.labaBersih],["Total pengeluaran",d.totalPengeluaran],["Saldo akhir",d.saldoAkhir]].forEach(x=>markup+='<div class="report-row"><span>'+x[0]+'</span><b>'+reportMoney(x[1])+'</b></div>');
+      markup+='</div>';
+    });
+  }
+  const txByDate={};
+  tx.forEach(t=>{const d=t.tanggal||data.from;if(!txByDate[d])txByDate[d]=[];txByDate[d].push(t);});
+  const dates=Object.keys(txByDate).sort((a,b)=>b.localeCompare(a));
+  markup+='<div class="report-heading" style="margin-top:16px">DAFTAR TRANSAKSI</div>';
+  if(!tx.length)markup+='<div class="report-empty">Tidak ada transaksi untuk ditampilkan.</div>';
+  dates.forEach(date=>{
+    markup+='<div class="report-day-title">'+escapeHTML(reportDateLabel(date))+'</div><div class="report-group">';
+    txByDate[date].forEach(t=>{
+      markup+='<div class="report-row"><span><b style="color:'+(t.tipe==="PEMASUKAN"?"#35c76f":"#ff6262")+'">'+escapeHTML(t.tipe)+'</b><br>'+escapeHTML(t.kategori)+' • '+escapeHTML(t.keterangan||"-")+'</span><b>'+reportMoney(t.nominal)+'</b></div>';
+    });
+    markup+='</div>';
+  });
+  document.getElementById("reportBody").innerHTML=markup;
+  document.getElementById("reportSub").textContent=isToday
+    ? "DATA HARI INI • "+reportDateLabel(data.from)+" • sumber: database"
+    : (data.mode==="single"?"LAPORAN TANGGAL "+reportDateLabel(data.from):"LAPORAN "+reportDateLabel(data.from)+" s.d. "+reportDateLabel(data.to));
+}
+function createDatabaseReportPDF(data){
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:"portrait",unit:"mm",format:[215,330],compress:true});
+  const W=215,H=330,M=14,CW=W-2*M;
+  const daily=(data.daily||[]).slice().sort((a,b)=>a.tanggal.localeCompare(b.tanggal));
+  const tx=(data.transactions||[]).slice().sort((a,b)=>String(b.dibuatPada||"").localeCompare(String(a.dibuatPada||"")));
+  const totals=reportTotals({...data,daily});
+  let y=16;
+  const fmt=reportMoney;
+  const text=(s,x,yy,size=8,bold=false,color=[20,20,20])=>{doc.setFont("helvetica",bold?"bold":"normal");doc.setFontSize(size);doc.setTextColor(...color);doc.text(String(s),x,yy);};
+  const center=(s,yy,size=12,bold=true)=>{doc.setFont("helvetica",bold?"bold":"normal");doc.setFontSize(size);doc.setTextColor(20,20,20);doc.text(String(s),W/2,yy,{align:"center"});};
+  const newPage=()=>{doc.addPage();y=15;center("LAPORAN CASHFLOW",y,12,true);y+=8;text(data.mode==="range"?"PERIODE "+reportDateLabel(data.from)+" s.d. "+reportDateLabel(data.to):reportDateLabel(data.from),M,y,8,false,[90,90,90]);y+=8;};
+  const ensure=height=>{if(y+height>H-15)newPage();};
+  const line=(label,value,color=[20,20,20])=>{ensure(7);text(label,M,y,8,false,[80,80,80]);text(fmt(value),W-M,y,8,true,color);doc.setDrawColor(220,220,220);doc.line(M,y+2,W-M,y+2);y+=7;};
+  center("LAPORAN CASHFLOW",y,14,true);y+=7;
+  center(data.mode==="range"?"PERIODE "+reportDateLabel(data.from)+" s.d. "+reportDateLabel(data.to):reportDateLabel(data.from),y,8,false);y+=12;
+  line("SALDO AWAL PERIODE",totals.saldoAwal,[23,105,210]);
+  line("TOTAL PEMASUKAN",totals.pemasukan,[22,128,60]);
+  line("TOTAL PENGELUARAN",totals.totalPengeluaran,[215,45,45]);
+  line("LABA KOTOR",totals.labaKotor);
+  line("LABA BERSIH",totals.labaBersih);
+  line("SALDO AKHIR PERIODE",totals.saldoAkhir,[23,105,210]);
+  if(!daily.length){ensure(10);text("Belum ada data tersimpan pada tanggal/periode ini.",M,y,8,false,[90,90,90]);y+=10;}
+  if(data.mode==="range"){
+    y+=4;text("RINCIAN PER HARI",M,y,9,true);y+=7;
+    daily.forEach(d=>{
+      ensure(48);
+      text(reportDateLabel(d.tanggal),M,y,8,true,[128,109,0]);y+=5;
+      [["Saldo awal",d.saldoAwal],["Pemasukan",d.pemasukan],["Total pengeluaran",d.totalPengeluaran],["Laba kotor",d.labaKotor],["Laba bersih",d.labaBersih],["Saldo akhir",d.saldoAkhir]].forEach(x=>line(x[0],x[1]));
+      y+=2;
+    });
+  }
+  y+=3;ensure(12);text("DAFTAR TRANSAKSI",M,y,9,true);y+=7;
+  let currentDate="";
+  tx.forEach((t,i)=>{
+    const date=t.tanggal||data.from;
+    const detail=String(t.keterangan||"-");
+    const wrapped=doc.splitTextToSize(detail,CW-124);
+    const rh=Math.max(10,wrapped.length*3.4+6);
+    ensure(rh+5);
+    if(date!==currentDate){currentDate=date;text(reportDateLabel(date),M,y,8,true,[128,109,0]);y+=5;ensure(rh);}
+    doc.setDrawColor(220,220,220);doc.rect(M,y,CW,rh);
+    text(String(i+1),M+2,y+5,7,false);
+    text(t.tipe,M+10,y+5,7,true,t.tipe==="PEMASUKAN"?[22,128,60]:[215,45,45]);
+    text(String(t.kategori||"-"),M+35,y+5,7,true);
+    doc.setFont("helvetica","normal");doc.setFontSize(7);
+    doc.text(wrapped,M+62,y+9);
+    text(fmt(t.nominal),W-M-2,y+5,7,true);
+    y+=rh;
+  });
+  const from=data.from||dateKey,to=data.to||from;
+  const dateName=from===to?from.split("-").reverse().join("-"):from.split("-").reverse().join("-")+"_sd_"+to.split("-").reverse().join("-");
+  doc.save("LAPORAN_CASHFLOW_"+dateName.replaceAll("/","-")+".pdf");
+}
 
 let lockedScrollY=0;
 function lockModalScroll(){

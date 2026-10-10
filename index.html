@@ -1655,7 +1655,7 @@ function reportDateLabel(iso){
 function reportTotals(data){
   const daily=data.daily||[];
   const tx=data.transactions||[];
-  const total={pemasukan:0,modal:0,operasional:0,harian:0,bayareun:0,labaKotor:0,labaBersih:0,totalPengeluaran:0,saldoAwal:0,saldoAkhir:0};
+  const total={pemasukan:0,modal:0,operasional:0,harian:0,bayareun:0,labaKotor:0,labaHarian:0,labaBersih:0,totalPengeluaran:0,saldoAwal:0,saldoAkhir:0};
   if(daily.length){
     total.saldoAwal=Number(daily[0].saldoAwal)||0;
     total.saldoAkhir=Number(daily[daily.length-1].saldoAkhir)||0;
@@ -1663,7 +1663,10 @@ function reportTotals(data){
       total.pemasukan+=Number(d.pemasukan)||0;
       total.modal+=Number(d.modal)||0;
       total.operasional+=Number(d.operasional)||0;
+      total.harian+=Number(d.harian)||0;
+      total.bayareun+=Number(d.bayareun)||0;
       total.labaKotor+=Number(d.labaKotor)||0;
+      total.labaHarian+=Number(d.labaHarian)||0;
       total.labaBersih+=Number(d.labaBersih)||0;
       total.totalPengeluaran+=Number(d.totalPengeluaran)||0;
     });
@@ -1678,6 +1681,7 @@ function reportTotals(data){
       if(t.tipe==="PENGELUARAN")total.totalPengeluaran+=n;
     });
     total.labaKotor=total.pemasukan-total.modal;
+    total.labaHarian=total.pemasukan-total.totalPengeluaran;
     total.labaBersih=total.labaKotor-total.operasional;
   }
   return total;
@@ -1692,6 +1696,7 @@ function renderDatabaseReport(data,isToday){
     ["TOTAL PEMASUKAN",totals.pemasukan,"#35c76f"],
     ["TOTAL PENGELUARAN",totals.totalPengeluaran,"#ff6262"],
     ["LABA KOTOR",totals.labaKotor,"#ffe600"],
+    ["LABA HARIAN",totals.labaHarian,"#ffb74d"],
     ["LABA BERSIH",totals.labaBersih,"#4b9cff"]
   ].map(x=>'<div class="report-total"><span>'+x[0]+'</span><b style="color:'+x[2]+'">'+reportMoney(x[1])+'</b></div>').join("")+'</div>';
   let markup=balance+totalGrid;
@@ -1705,7 +1710,7 @@ function renderDatabaseReport(data,isToday){
   if(!isToday && daily.length>1){
     daily.forEach(d=>{
       markup+='<div class="report-day-title">'+escapeHTML(reportDateLabel(d.tanggal))+'</div><div class="report-group">';
-      [["Saldo awal",d.saldoAwal],["Pemasukan",d.pemasukan],["Modal",d.modal],["Laba kotor",d.labaKotor],["Operasional",d.operasional],["Laba bersih",d.labaBersih],["Total pengeluaran",d.totalPengeluaran],["Saldo akhir",d.saldoAkhir]].forEach(x=>markup+='<div class="report-row"><span>'+x[0]+'</span><b>'+reportMoney(x[1])+'</b></div>');
+      [["Saldo awal",d.saldoAwal],["Pemasukan",d.pemasukan],["Modal",d.modal],["Operasional",d.operasional],["Harian",d.harian],["Bayareun",d.bayareun],["Total pengeluaran",d.totalPengeluaran],["Laba kotor",d.labaKotor],["Laba harian",d.labaHarian],["Laba bersih",d.labaBersih],["Saldo akhir",d.saldoAkhir]].forEach(x=>markup+='<div class="report-row"><span>'+x[0]+'</span><b>'+reportMoney(x[1])+'</b></div>');
       markup+='</div>';
     });
   }
@@ -1746,15 +1751,16 @@ function createDatabaseReportPDF(data){
   line("TOTAL PEMASUKAN",totals.pemasukan,[22,128,60]);
   line("TOTAL PENGELUARAN",totals.totalPengeluaran,[215,45,45]);
   line("LABA KOTOR",totals.labaKotor);
+  line("LABA HARIAN",totals.labaHarian);
   line("LABA BERSIH",totals.labaBersih);
   line("SALDO AKHIR PERIODE",totals.saldoAkhir,[23,105,210]);
   if(!daily.length){ensure(10);text("Belum ada data tersimpan pada tanggal/periode ini.",M,y,8,false,[90,90,90]);y+=10;}
   if(data.mode==="range"){
     y+=4;text("RINCIAN PER HARI",M,y,9,true);y+=7;
     daily.forEach(d=>{
-      ensure(48);
+      ensure(80);
       text(reportDateLabel(d.tanggal),M,y,8,true,[128,109,0]);y+=5;
-      [["Saldo awal",d.saldoAwal],["Pemasukan",d.pemasukan],["Total pengeluaran",d.totalPengeluaran],["Laba kotor",d.labaKotor],["Laba bersih",d.labaBersih],["Saldo akhir",d.saldoAkhir]].forEach(x=>line(x[0],x[1]));
+      [["Saldo awal",d.saldoAwal],["Pemasukan",d.pemasukan],["Modal",d.modal],["Operasional",d.operasional],["Harian",d.harian],["Bayareun",d.bayareun],["Total pengeluaran",d.totalPengeluaran],["Laba kotor",d.labaKotor],["Laba harian",d.labaHarian],["Laba bersih",d.labaBersih],["Saldo akhir",d.saldoAkhir]].forEach(x=>line(x[0],x[1]));
       y+=2;
     });
   }

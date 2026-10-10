@@ -1606,51 +1606,42 @@ async function acquireAfterLogin(takeOver=false){const out=await apiCall({action
 async function loadServerDraft(){
   loadingRemote=true;
   let loadedRemoteDraft=false;
-  let localDraftPreserved=false;
   try{
-    // Simpan snapshot lokal sebelum membaca draft server. Input lokal adalah
-    // salinan pemulihan utama jika sesi/lock terputus saat sedang mengetik.
-    let localApp={},localTools={};
-    try{localApp=JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}')}catch(e){}
-    try{localTools=JSON.parse(localStorage.getItem(TOOL_STORAGE_KEY)||'{}')}catch(e){}
-    const hasLocalDraft=localApp && localApp.date===dateKey;
     const out=await apiCall({action:'getDraft',tanggal:dateKey});
     draftRevision=Number(out.revision||(out.draft&&out.draft.revision))||0;
     if(out.draft){
-      if(hasLocalDraft){
-        // Jangan menimpa input terbaru di perangkat ini dengan draft server
-        // yang mungkin tertinggal sebelum lock habis.
-        localDraftPreserved=true;
-      }else{
+      const marker=dateKey+':'+draftRevision;
+      if(sessionStorage.getItem('cashflow_loaded_draft')!==marker){
         localStorage.setItem(STORAGE_KEY,JSON.stringify(out.draft.app||{}));
         localStorage.setItem(TOOL_STORAGE_KEY,JSON.stringify(out.draft.tools||{}));
-        sessionStorage.setItem('cashflow_loaded_draft',dateKey+':'+draftRevision);
+        sessionStorage.setItem('cashflow_loaded_draft',marker);
         location.reload();
         return;
       }
       loadedRemoteDraft=true;
     }
     // Selalu cek saldo dari DATA HARIAN, termasuk ketika draft server ditemukan.
+    // Draft lama dengan saldo 0/kosong tidak boleh menimpa saldo akhir database.
     const balance=await apiCall({action:'getLatestBalance',tanggal:dateKey});
     const saldoDatabase=Number(balance.saldoAkhir)||0;
     let app={};
     try{app=JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}')}catch(e){}
     if(app.date!==dateKey) app={date:dateKey};
     const saldoDraft=Number(String(app.saldoSebelumnya||'').replace(/[^\d-]/g,''))||0;
-    if(!String(app.saldoSebelumnya||'').trim() || saldoDraft===0){
+    if(!loadedRemoteDraft || !String(app.saldoSebelumnya||'').trim() || saldoDraft===0){
       app.saldoSebelumnya=saldoDatabase.toLocaleString('id-ID');
       localStorage.setItem(STORAGE_KEY,JSON.stringify(app));
       document.getElementById('saldoSebelumnya').value=app.saldoSebelumnya;
+      // Jangan mengubah input transaksi atau data draft lainnya.
       refresh();
     }
   }finally{
     loadingRemote=false;
   }
-  // Setelah akses pulih, kirim snapshot lokal yang dipertahankan ke server.
-  // Jika belum ada draft lokal/server, ini juga membuat draft awal.
-  if(!loadedRemoteDraft || localDraftPreserved) queueDraftSync();
+  // Buat draft server pertama dari saldo database terbaru jika belum ada draft aktif.
+  if(!loadedRemoteDraft) queueDraftSync();
 }
-function startSyncLoops(){clearInterval(pollTimer);clearInterval(heartbeatTimer);pollTimer=setInterval(async()=>{if(!hasEditAccess)return;try{const out=await apiCall({action:'heartbeat'});if(!out.hasAccess){showGate(out.lock);gateError('Akses edit perangkat ini sudah berakhir. Draft lokal tidak dihapus.');clearInterval(pollTimer);clearInterval(heartbeatTimer);}}catch(e){console.warn(e.message)}},25000);heartbeatTimer=setInterval(()=>{if(hasEditAccess)syncDraftNow()},15000);}
+function startSyncLoops(){clearInterval(pollTimer);clearInterval(heartbeatTimer);pollTimer=setInterval(async()=>{if(!hasEditAccess)return;try{const out=await apiCall({action:'heartbeat'});if(!out.hasAccess){showGate(out.lock);gateError('Akses edit perangkat ini sudah berakhir. Draft lokal tidak dihapus.');clearInterval(pollTimer);clearInterval(heartbeatTimer);}}catch(e){console.warn(e.message)}},30000);heartbeatTimer=setInterval(()=>{if(hasEditAccess)syncDraftNow()},15000);}
 document.getElementById('accessPin').addEventListener('input',e=>{e.target.value=e.target.value.replace(/\D/g,'').slice(0,6);});
 document.getElementById('accessLoginBtn').addEventListener('click',async()=>{const pin=document.getElementById('accessPin').value;if(!/^\d{6}$/.test(pin)){gateError('Masukkan PIN tepat 6 angka.');return;}const btn=document.getElementById('accessLoginBtn');btn.disabled=true;gateError('Memeriksa PIN...');try{const out=await fetch(CASHFLOW_API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'login',pin,deviceId,deviceLabel})}).then(r=>r.json());if(!out.success)throw new Error(out.message||'PIN salah.');serverToken=out.token;sessionStorage.setItem(SESSION_KEY,serverToken);await acquireAfterLogin(false);}catch(e){gateError(e.message||'Login gagal.');}finally{btn.disabled=false;}});
 document.getElementById('takeOverBtn').addEventListener('click',async()=>{try{if(!serverToken){const pin=document.getElementById('accessPin').value;if(!/^\d{6}$/.test(pin)){gateError('Masukkan PIN 6 angka terlebih dahulu, lalu tekan MINTA ALIH AKSES.');document.getElementById('accessPin').focus();return;}const login=await fetch(CASHFLOW_API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'login',pin,deviceId,deviceLabel})}).then(r=>r.json());if(!login.success)throw new Error(login.message||'PIN salah.');serverToken=login.token;sessionStorage.setItem(SESSION_KEY,serverToken);}gateError('');showModal('Konfirmasi alih akses','Pastikan sudah konfirmasi ke tim. Ambil alih akses edit dari '+(pendingLock?.deviceLabel||'perangkat lain')+'?','YA, AMBIL ALIH',async()=>{try{await acquireAfterLogin(true);}catch(e){gateError(e.message);}});}catch(e){gateError(e.message||'Tidak bisa meminta alih akses.');}});

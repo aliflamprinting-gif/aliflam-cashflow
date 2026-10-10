@@ -481,10 +481,6 @@ button:active{
         <div class="extra-list" data-income-extra-list="whatsapp"></div>
       </div>
     </section>
-      <div class="page-balance">
-        <div class="page-balance-label">Saldo Operasional Akhir</div>
-        <div class="page-balance-value" id="saldoAkhirIncome">Rp 0</div>
-      </div>
     </div>
 
     <div class="page-view page-view-expense" id="expensePage">
@@ -501,8 +497,6 @@ button:active{
         <div class="page-balance-label">Saldo Operasional Akhir</div>
         <div class="page-balance-value" id="saldoAkhirExpense">Rp 0</div>
       </div>
-    </div>
-
     <section class="card status-card" id="saldoStatusCard">
       <div class="section section-saldo">STATUS SALDO OTOMATIS</div>
       <div class="sync-grid">
@@ -511,6 +505,8 @@ button:active{
       </div>
       <div class="tool-result" style="margin-top:12px"><div class="tool-result-label">KETERANGAN</div><div class="tool-result-value tool-neutral" id="syncResult">SALDO SINGKRON</div><div id="syncDifference" class="tool-result-label" style="margin-top:6px">Selisih Rp 0</div></div>
     </section>
+    </div>
+
   </div>
 
   <nav class="bottom-nav" id="bottomNav" aria-label="Navigasi utama">
@@ -638,7 +634,7 @@ function refresh(){
   document.getElementById("incomeHighlight").textContent=rp(t.income);
   document.getElementById("expenseHighlight").textContent=rp(t.expense);
   document.getElementById("netHighlight").textContent=rp(t.net);
-  ["saldoAkhirIncome","saldoAkhirExpense"].forEach(id=>{
+  ["saldoAkhirExpense"].forEach(id=>{
     const el=document.getElementById(id);
     if(!el)return;
     el.textContent=(t.saldoAkhir<0?"-":"")+rp(Math.abs(t.saldoAkhir));
@@ -1629,7 +1625,7 @@ async function loadServerDraft(){
       let app={};
       try{app=JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}')}catch(e){}
       if(app.date!==dateKey) app={date:dateKey};
-      app.saldoSebelumnya=saldo?saldo.toLocaleString('id-ID'):'';
+      app.saldoSebelumnya=saldo.toLocaleString('id-ID');
       localStorage.setItem(STORAGE_KEY,JSON.stringify(app));
       document.getElementById('saldoSebelumnya').value=app.saldoSebelumnya;
       // Terapkan hanya saldo awal; input lokal lain tetap dipertahankan jika ada.

@@ -676,6 +676,10 @@ html.show-access-gate #accessGate{display:flex}
 <script>
 const CASHFLOW_API_URL="https://script.google.com/macros/s/AKfycbyr2Z3c1d9Br78rdU7pRSl95RapMyZj0DHCOhVSgOj0F_Fyi4YQd6hjP8O3eLH236grrA/exec";
 const STORAGE_KEY="cashflow_harian_v1";
+const PENDING_SAVE_KEY="cashflow_pending_save_v1";
+let saveRecoveryRunning=false;
+let savePendingLocked=false;
+let savePendingOriginalDisabled=new Map();
 const EXPENSE_CATEGORIES=["modal","operasional","harian","bayareun"];
 let expenseItems=[];
 let editingExpenseIndex=-1;
@@ -1059,90 +1063,146 @@ function escapeHTML(s){
   return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
 }
 
-async function saveCashflowToAPI(){
+function buildSavePayload(processId){
   const t=collect();
-  const modalTotal=expenseItems
-    .filter(item=>item.category==="modal")
-    .reduce((sum,item)=>sum+(Number(item.amount)||0),0);
-  const operasionalTotal=expenseItems
-    .filter(item=>item.category==="operasional")
-    .reduce((sum,item)=>sum+(Number(item.amount)||0),0);
-
+  const modalTotal=expenseItems.filter(item=>item.category==="modal").reduce((sum,item)=>sum+(Number(item.amount)||0),0);
+  const operasionalTotal=expenseItems.filter(item=>item.category==="operasional").reduce((sum,item)=>sum+(Number(item.amount)||0),0);
   const labaKotor=t.income-modalTotal;
   const labaBersih=labaKotor-operasionalTotal;
   const status=t.saldoAkhir>t.saldoSebelumnya?"PLUS":t.saldoAkhir<t.saldoSebelumnya?"MINUS":"IMPAS";
   const selisih=t.saldoAkhir-t.saldoSebelumnya;
-
   const transactions=[];
-
   incomeRows().forEach(row=>{
     const label=String(row[0]||"");
     let kategori="SHOPEE";
     let keterangan=label;
-
-    if(label.startsWith("Shopee - ")){
-      kategori="SHOPEE";
-      keterangan=label.replace("Shopee - ","").trim();
-    }else if(label.startsWith("WhatsApp")){
-      kategori="WHATSAPP";
-      keterangan=label.replace(/^WhatsApp\s*-\s*/,"").trim();
-    }else{
-      kategori="WHATSAPP";
-    }
-
-    transactions.push({
-      tipe:"PEMASUKAN",
-      kategori,
-      keterangan,
-      nominal:Number(row[1])||0
-    });
+    if(label.startsWith("Shopee - ")){kategori="SHOPEE";keterangan=label.replace("Shopee - ","").trim();}
+    else if(label.startsWith("WhatsApp")){kategori="WHATSAPP";keterangan=label.replace(/^WhatsApp\s*-\s*/,"").trim();}
+    else kategori="WHATSAPP";
+    transactions.push({tipe:"PEMASUKAN",kategori,keterangan,nominal:Number(row[1])||0});
   });
-
-  expenseRows().forEach(row=>{
-    transactions.push({
-      tipe:"PENGELUARAN",
-      kategori:String(row[2]||"").toUpperCase(),
-      keterangan:String(row[0]||"").trim(),
-      nominal:Number(row[1])||0
-    });
-  });
-
-  const payload={
-    action:"saveCashflow",
-    token:serverToken,
-    deviceId:deviceId,
-    deviceLabel:deviceLabel,
-    data:{
-      tanggal:dateKey,
-      saldoAwal:t.saldoSebelumnya,
-      pemasukan:t.income,
-      modal:modalTotal,
-      labaKotor,
-      operasional:operasionalTotal,
-      labaBersih,
-      totalPengeluaran:t.expense,
-      saldoAkhir:t.saldoAkhir,
-      status,
-      selisih,
-      syncSaldo:moneyInputValue("syncSaldo"),
-      syncCash:moneyInputValue("syncCash"),
-      statusSinkron:(syncState()===0 && t.saldoAkhir>=0)
-    },
+  expenseRows().forEach(row=>transactions.push({tipe:"PENGELUARAN",kategori:String(row[2]||"").toUpperCase(),keterangan:String(row[0]||"").trim(),nominal:Number(row[1])||0}));
+  return {
+    action:"saveCashflow",processId,token:serverToken,deviceId,deviceLabel,
+    data:{tanggal:dateKey,saldoAwal:t.saldoSebelumnya,pemasukan:t.income,modal:modalTotal,labaKotor,operasional:operasionalTotal,labaBersih,totalPengeluaran:t.expense,saldoAkhir:t.saldoAkhir,status,selisih,syncSaldo:moneyInputValue("syncSaldo"),syncCash:moneyInputValue("syncCash"),statusSinkron:(syncState()===0 && t.saldoAkhir>=0)},
     transactions
   };
+}
 
-  const response=await fetch(CASHFLOW_API_URL,{
-    method:"POST",
-    headers:{"Content-Type":"text/plain;charset=utf-8"},
-    body:JSON.stringify(payload)
-  });
-
-  if(!response.ok) throw new Error("Server API tidak merespons dengan benar.");
-
-  const result=await response.json();
-  if(!result.success) throw new Error(result.message||"Data gagal disimpan ke database.");
-
+async function sendSavePayload(pending){
+  const payload={...pending.payload,token:serverToken,deviceId,deviceLabel,processId:pending.processId};
+  let response;
+  try{
+    response=await fetch(CASHFLOW_API_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(payload)});
+  }catch(err){err.saveUncertain=true;throw err;}
+  if(!response.ok){const err=new Error("Koneksi atau respons server bermasalah.");err.saveUncertain=true;throw err;}
+  let result;
+  try{result=await response.json();}catch(err){const e=new Error("Respons server tidak terbaca.");e.saveUncertain=true;throw e;}
+  if(result.pending){const e=new Error(result.message||"Penyimpanan masih diproses.");e.saveUncertain=true;throw e;}
+  if(!result.success){const e=new Error(result.message||"Data gagal disimpan ke database.");e.saveUncertain=false;throw e;}
   return result;
+}
+
+async function saveCashflowToAPI(processId){
+  let pending;
+  try{pending=JSON.parse(localStorage.getItem(PENDING_SAVE_KEY)||"null")}catch(_){pending=null;}
+  if(!pending||pending.processId!==processId){
+    const payload=buildSavePayload(processId);
+    pending={processId,payload,createdAt:new Date().toISOString()};
+    localStorage.setItem(PENDING_SAVE_KEY,JSON.stringify(pending));
+  }
+  return sendSavePayload(pending);
+}
+
+function setSavePendingLock(locked){
+  savePendingLocked=!!locked;
+  const allowed=new Set(["reportBtn","menuTodayReport","menuFullReport","reportPopupClose","reportTabSingle","reportTabRange","reportLoadBtn","reportPdfBtn"]);
+  const controls=[...document.querySelectorAll(".app input,.app button,#expenseBackdrop input,#expenseBackdrop button,#planBackdrop input,#planBackdrop button,#summaryBackdrop input,#summaryBackdrop button")];
+  if(locked){
+    controls.forEach(el=>{
+      if(allowed.has(el.id))return;
+      if(!savePendingOriginalDisabled.has(el))savePendingOriginalDisabled.set(el,!!el.disabled);
+      el.disabled=true;
+    });
+    document.getElementById("pdfBtn").disabled=true;
+  }else{
+    controls.forEach(el=>{
+      if(savePendingOriginalDisabled.has(el))el.disabled=savePendingOriginalDisabled.get(el);
+    });
+    savePendingOriginalDisabled.clear();
+    document.getElementById("pdfBtn").disabled=false;
+  }
+}
+
+function waitForSaveRecovery(ms){return new Promise(resolve=>setTimeout(resolve,ms));}
+
+async function checkSaveStatus(processId){
+  return apiCall({action:"checkSaveStatus",processId});
+}
+
+async function completeSuccessfulSave(result){
+  localStorage.removeItem(PENDING_SAVE_KEY);
+  setSavePendingLock(false);
+  const btn=document.getElementById("pdfBtn");
+  btn.disabled=true;
+  btn.textContent="MENYIAPKAN HASIL...";
+  const saldoAkhir=Number(result.summary?.saldoAkhir ?? collect().saldoAkhir);
+  // Reset hanya setelah backend memastikan penyimpanan berhasil, bukan saat respons masih tidak pasti.
+  resetDailyFormAfterSave(saldoAkhir);
+  try{
+    btn.textContent="MEMBUAT PDF...";
+    const pdfCreated=createPDF(result);
+    if(pdfCreated)showToast("Tersimpan • "+result.jumlahTransaksiHariIni+" transaksi hari ini");
+    else showModal("Data sudah tersimpan","Database berhasil diperbarui, tetapi PDF belum bisa dibuat karena mesin PDF belum termuat. Buka ikon buku untuk melihat laporan dan mencoba unduh PDF lagi.","OK");
+  }catch(err){
+    showModal("Data sudah tersimpan","Data sudah masuk database, tetapi PDF gagal dibuat. Data tidak akan disimpan ulang. Buka ikon buku untuk melihat laporan dan coba unduh PDF lagi.","OK");
+  }finally{
+    btn.disabled=false;
+    btn.textContent="SIMPAN & BUAT PDF F4";
+  }
+}
+
+async function recoverPendingSave(pending){
+  if(saveRecoveryRunning||!pending)return;
+  saveRecoveryRunning=true;
+  setSavePendingLock(true);
+  const btn=document.getElementById("pdfBtn");
+  btn.disabled=true;
+  btn.textContent="MEMERIKSA STATUS...";
+  let delay=1500;
+  try{
+    while(true){
+      if(!navigator.onLine){btn.textContent="MENUNGGU KONEKSI...";await waitForSaveRecovery(2500);continue;}
+      try{
+        const status=await checkSaveStatus(pending.processId);
+        if(status.status==="SUCCESS"&&status.result){await completeSuccessfulSave(status.result);return;}
+        if(status.status==="NOT_FOUND"){
+          // Belum ada catatan di backend: kirim payload yang sama dengan ID proses yang sama.
+          btn.textContent="MELANJUTKAN PENYIMPANAN...";
+          try{const result=await sendSavePayload(pending);await completeSuccessfulSave(result);return;}
+          catch(err){if(!err.saveUncertain){localStorage.removeItem(PENDING_SAVE_KEY);setSavePendingLock(false);showModal("Gagal menyimpan",err.message||"Data ditolak oleh server. Periksa data lalu coba lagi.","OK");return;}}
+        }else if(status.status==="PROCESSING"){
+          btn.textContent="MEMULIHKAN PENYIMPANAN...";
+          try{const result=await sendSavePayload(pending);await completeSuccessfulSave(result);return;}
+          catch(err){if(!err.saveUncertain){
+            // Status PROCESSING berarti proses pernah dimulai; pertahankan kunci dan coba pulihkan lagi.
+            console.warn("Proses simpan masih perlu dipulihkan:",err.message);
+          }}
+        }
+      }catch(err){
+        if(/Akses perangkat ini sudah berpindah|Sesi berakhir|Sesi tidak valid/i.test(err.message||"")){
+          btn.textContent="AKSES DIPERLUKAN";
+          showGate();gateError("Penyimpanan belum dipastikan. Setelah akses kembali, aplikasi akan memeriksa proses yang sama.");
+          return;
+        }
+      }
+      btn.textContent="MENUNGGU STATUS SERVER...";
+      await waitForSaveRecovery(delay);
+      delay=Math.min(5000,delay+500);
+    }
+  }finally{
+    saveRecoveryRunning=false;
+  }
 }
 
 function incomeRows(){
@@ -1513,55 +1573,49 @@ function createPDF(saveResult){
 }
 
 document.getElementById("pdfBtn").addEventListener("click",async()=>{
+  if(savePendingLocked){
+    let pending=null;try{pending=JSON.parse(localStorage.getItem(PENDING_SAVE_KEY)||"null")}catch(_){}
+    if(pending)recoverPendingSave(pending);
+    return;
+  }
+  let existingPending=null;try{existingPending=JSON.parse(localStorage.getItem(PENDING_SAVE_KEY)||"null")}catch(_){}
+  if(existingPending){recoverPendingSave(existingPending);return;}
+
   const syncDifference=syncState();
   const syncTotals=collect();
   if(syncTotals.saldoAkhir<0 || syncDifference!==0){
-    showModal("Saldo belum singkron","Sebelum menyimpan ke database atau membuat PDF, pastikan Saldo Rekening + Cash sama dengan Saldo Operasional Akhir. Periksa kembali bagian STATUS SALDO OTOMATIS.","OK",()=>switchPage("expense"));
-    return;
+    showModal("Saldo belum singkron","Sebelum menyimpan ke database atau membuat PDF, pastikan Saldo Rekening + Cash sama dengan Saldo Operasional Akhir. Periksa kembali bagian STATUS SALDO OTOMATIS.","OK",()=>switchPage("expense"));return;
   }
   const whatsappAmount=num(document.querySelector('.income-group[data-key="whatsapp"] .money'));
   const whatsappDesc=document.getElementById("whatsappDesc").value.trim();
-  if(whatsappAmount>0&&!whatsappDesc){
-    showModal("Keterangan diperlukan","Tulis dulu keterangan pemasukan WhatsApp.","OK",()=>document.getElementById("whatsappDesc").focus());return;
-  }
-
-  const whatsappExtraMissing=[...document.querySelectorAll('[data-income-extra-list="whatsapp"] .extra-row')].find(row=>{
-    return num(row.querySelector(".extra-income"))>0 && !(row.querySelector(".extra-desc")?.value.trim());
-  });
-  if(whatsappExtraMissing){
-    showModal("Keterangan diperlukan","Setiap pemasukan WhatsApp tambahan wajib punya keterangan.","OK",()=>whatsappExtraMissing.querySelector(".extra-desc").focus());return;
-  }
-
-  if(editingExpenseIndex>=0 || num(document.getElementById("expenseInputAmount"))>0 || document.getElementById("expenseInputDesc").value.trim()!==""){
+  if(whatsappAmount>0&&!whatsappDesc){showModal("Keterangan diperlukan","Tulis dulu keterangan pemasukan WhatsApp.","OK",()=>document.getElementById("whatsappDesc").focus());return;}
+  const whatsappExtraMissing=[...document.querySelectorAll('[data-income-extra-list="whatsapp"] .extra-row')].find(row=>num(row.querySelector(".extra-income"))>0&&!(row.querySelector(".extra-desc")?.value.trim()));
+  if(whatsappExtraMissing){showModal("Keterangan diperlukan","Setiap pemasukan WhatsApp tambahan wajib punya keterangan.","OK",()=>whatsappExtraMissing.querySelector(".extra-desc").focus());return;}
+  if(editingExpenseIndex>=0||num(document.getElementById("expenseInputAmount"))>0||document.getElementById("expenseInputDesc").value.trim()!==""){
     showModal("Pengeluaran belum disimpan","Simpan dulu pengeluaran yang sedang diisi.","OK",()=>document.getElementById("expenseInputAmount").focus());return;
   }
-
   const currentTotals=collect();
-  if(currentTotals.saldoSebelumnya<0 || currentTotals.saldoAkhir<0){
-    showModal("Saldo operasional minus","Pengeluaran lebih besar dari sisa saldo operasional yang ada. Silakan input pemasukan atau sesuaikan pengeluaran. Data tidak akan disimpan.","OK");
-    return;
-  }
+  if(currentTotals.saldoSebelumnya<0||currentTotals.saldoAkhir<0){showModal("Saldo operasional minus","Pengeluaran lebih besar dari sisa saldo operasional yang ada. Silakan input pemasukan atau sesuaikan pengeluaran. Data tidak akan disimpan.","OK");return;}
 
   const btn=document.getElementById("pdfBtn");
-  const originalText=btn.textContent;
-  btn.disabled=true;
-  btn.textContent="MENYIMPAN KE DATABASE...";
-
+  const processId=(crypto.randomUUID?crypto.randomUUID():("save-"+Date.now()+"-"+Math.random().toString(36).slice(2)));
+  btn.disabled=true;btn.textContent="MENYIMPAN KE DATABASE...";
+  setSavePendingLock(true);
   try{
-    const result=await saveCashflowToAPI();
-    btn.textContent="MEMBUAT PDF...";
-    const pdfCreated=createPDF(result);
-    resetDailyFormAfterSave(Number(result.summary?.saldoAkhir ?? collect().saldoAkhir));
-    if(pdfCreated){
-      showToast("Tersimpan • "+result.jumlahTransaksiHariIni+" transaksi hari ini");
-    }else{
-      showModal("Data sudah tersimpan","Database berhasil diperbarui, tetapi PDF belum bisa dibuat karena mesin PDF belum termuat. Buka ikon buku untuk melihat laporan dan mencoba unduh PDF lagi.","OK");
-    }
+    const result=await saveCashflowToAPI(processId);
+    await completeSuccessfulSave(result);
   }catch(err){
-    showModal("Gagal menyimpan",err?.message||"Data gagal disimpan ke Google Sheet.","OK");
-  }finally{
-    btn.disabled=false;
-    btn.textContent=originalText;
+    if(err.saveUncertain){
+      let pending=null;try{pending=JSON.parse(localStorage.getItem(PENDING_SAVE_KEY)||"null")}catch(_){}
+      btn.textContent="MEMERIKSA STATUS...";
+      showToast("Respons belum pasti. Aplikasi sedang memeriksa database...");
+      if(pending)recoverPendingSave(pending);
+    }else{
+      localStorage.removeItem(PENDING_SAVE_KEY);
+      setSavePendingLock(false);
+      btn.disabled=false;btn.textContent="SIMPAN & BUAT PDF F4";
+      showModal("Gagal menyimpan",err?.message||"Data ditolak oleh server. Periksa data lalu coba lagi.","OK");
+    }
   }
 });
 
@@ -2044,7 +2098,7 @@ function hideGate(){document.documentElement.classList.remove('show-access-gate'
 function readLocalDraft(){let app={};let tools={};try{app=JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}')}catch(e){}try{tools=JSON.parse(localStorage.getItem(TOOL_STORAGE_KEY)||'{}')}catch(e){}return {tanggal:dateKey,app,tools,page:document.getElementById('expensePage').classList.contains('active')?'expense':'income'};}
 async function syncDraftNow(){if(!hasEditAccess||loadingRemote)return;const draft=readLocalDraft();try{const out=await apiCall({action:'saveDraft',baseRevision:draftRevision,draft});draftRevision=out.revision||draftRevision;}catch(e){if(/Akses perangkat ini sudah berpindah|Sesi berakhir/.test(e.message)){showGate();gateError('Akses berpindah ke perangkat lain. Masukkan PIN jika ingin meminta akses kembali.');}else console.warn('Draft belum tersinkron:',e.message);}}
 function queueDraftSync(){if(!hasEditAccess||loadingRemote)return;clearTimeout(draftTimer);draftTimer=setTimeout(syncDraftNow,900);}
-async function becomeActiveDevice(){clearInterval(accessRequestTimer);accessRequestTimer=null;pendingLock=null;hasEditAccess=true;closeAccessRequestModal();hideGate();document.getElementById('accessPin').value='';gateError('');document.getElementById('accessStatus').textContent='';await loadServerDraft();if(hasEditAccess)startSyncLoops();return true;}
+async function becomeActiveDevice(){clearInterval(accessRequestTimer);accessRequestTimer=null;pendingLock=null;hasEditAccess=true;closeAccessRequestModal();hideGate();document.getElementById('accessPin').value='';gateError('');document.getElementById('accessStatus').textContent='';await loadServerDraft();if(hasEditAccess){startSyncLoops();resumePendingSaveIfAny();}return true;}
 async function beginRequestPolling(requestId){clearInterval(accessRequestTimer);accessRequestTimer=setInterval(async()=>{try{const out=await apiCall({action:'checkAccessRequest',requestId});if(out.status==='approved'||out.hasAccess){clearInterval(accessRequestTimer);accessRequestTimer=null;await becomeActiveDevice();}else if(out.status==='denied'){clearInterval(accessRequestTimer);accessRequestTimer=null;pendingLock=null;document.getElementById('accessLoginBtn').disabled=false;gateMessage('Permintaan akses ditolak.');gateError(out.message||'Perangkat aktif menolak permintaan.');document.getElementById('accessStatus').textContent='Perangkat: '+deviceLabel;} }catch(e){console.warn('Status permintaan akses:',e.message)}},1000);}
 async function acquireAfterLogin(){const out=await apiCall({action:'acquireAccess'});if(out.acquired||out.hasAccess){return becomeActiveDevice();}if(out.pending){pendingLock={requestId:out.requestId};gateMessage('Permintaan akses dikirim ke '+(out.activeDeviceLabel||'perangkat aktif')+'.');gateError('Menunggu persetujuan selama maksimal 15 detik. Jika tidak ada respons, akses otomatis diberikan.');document.getElementById('accessStatus').textContent='Permintaan akses sedang menunggu…';document.getElementById('accessLoginBtn').disabled=true;beginRequestPolling(out.requestId);return false;}throw new Error(out.message||'Tidak bisa meminta akses.');}
 async function loadServerDraft(){
@@ -2090,7 +2144,8 @@ function startSyncLoops(){stopSyncLoops();pollTimer=setInterval(async()=>{if(!ha
 document.getElementById('accessPin').addEventListener('input',e=>{e.target.value=e.target.value.replace(/\D/g,'').slice(0,6);});
 document.getElementById('accessLoginBtn').addEventListener('click',async()=>{const pin=document.getElementById('accessPin').value;if(!/^\d{6}$/.test(pin)){gateError('Masukkan PIN tepat 6 angka.');return;}const btn=document.getElementById('accessLoginBtn');btn.disabled=true;gateError('Memeriksa PIN...');try{const out=await fetch(CASHFLOW_API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'login',pin,deviceId,deviceLabel})}).then(r=>r.json());if(!out.success)throw new Error(out.message||'PIN salah.');serverToken=out.token;localStorage.setItem(SESSION_KEY,serverToken);await acquireAfterLogin();}catch(e){gateError(e.message||'Login gagal.');btn.disabled=false;}});
 document.getElementById('takeOverBtn').hidden=true;
-async function bootAccess(){if(!serverToken){showGate();return;}try{const out=await apiCall({action:'heartbeat'});if(!out.hasAccess){showGate();gateError('Perangkat ini tidak sedang memegang akses. Masukkan PIN untuk meminta akses.');return;}hasEditAccess=true;hideGate();await loadServerDraft();if(hasEditAccess)startSyncLoops();}catch(e){serverToken='';localStorage.removeItem(SESSION_KEY);showGate();gateError('Sesi tidak valid. Masukkan PIN kembali.');}}
+function resumePendingSaveIfAny(){let pending=null;try{pending=JSON.parse(localStorage.getItem(PENDING_SAVE_KEY)||"null")}catch(_){}if(pending&&pending.processId&&hasEditAccess){setSavePendingLock(true);recoverPendingSave(pending);}}
+async function bootAccess(){if(!serverToken){showGate();return;}try{const out=await apiCall({action:'heartbeat'});if(!out.hasAccess){showGate();gateError('Perangkat ini tidak sedang memegang akses. Masukkan PIN untuk meminta akses.');return;}hasEditAccess=true;hideGate();await loadServerDraft();if(hasEditAccess){startSyncLoops();resumePendingSaveIfAny();}}catch(e){serverToken='';localStorage.removeItem(SESSION_KEY);showGate();gateError('Sesi tidak valid. Masukkan PIN kembali.');}}
 
 loadToolState();
 syncState();

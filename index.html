@@ -401,6 +401,11 @@ button:active{
 .page-date .day{font-size:13px;font-weight:900;text-transform:uppercase;margin-top:0;color:#f5f7fa}
 .page-date .date{font-size:11px;color:#9aa1ab;margin-top:2px}
 .header{min-height:64px;padding:12px 58px;text-align:center}
+.header-center{min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}
+.header-center .title{font-size:20px;line-height:1.15;white-space:nowrap}
+.header-date{display:flex;align-items:center;justify-content:center;gap:0;color:#ffe600;font-size:11px;font-weight:900;line-height:1.2;text-transform:uppercase;white-space:nowrap}
+.header-date-separator{white-space:pre}
+@media(max-width:360px){.header-center .title{font-size:17px}.header-date{font-size:10px}}
 .header-menu-wrap{position:absolute;left:12px;top:50%;transform:translateY(-50%);z-index:200}
 .header-menu-btn{position:relative;z-index:201;pointer-events:auto}
 .header .summary-menu{pointer-events:auto}
@@ -494,7 +499,10 @@ html.show-access-gate #accessGate{display:flex}
         <button type="button" id="clearBtn" class="danger">🗑️ BERSIHKAN</button>
       </div>
     </div>
-    <div class="title">CASHFLOW HARIAN</div>
+    <div class="header-center">
+      <div class="title">CASHFLOW HARIAN</div>
+      <div class="header-date"><span id="dayHeader"></span><span class="header-date-separator">, </span><span id="dateHeader"></span></div>
+    </div>
     <div class="header-report-wrap">
       <button type="button" class="header-report-btn" id="reportBtn" aria-label="Buku catatan" title="Laporan">▤</button>
       <div class="report-menu" id="reportMenu">
@@ -506,7 +514,6 @@ html.show-access-gate #accessGate{display:flex}
 
   <div class="content">
     <div class="page-view page-view-income active" id="incomePage">
-      <div class="page-date"><div class="day" id="dayIncome"></div><div class="date" id="dateIncome"></div></div>
       <section class="card">
       <div class="section section-saldo">Saldo Operasional</div>
       <div class="field">
@@ -552,7 +559,6 @@ html.show-access-gate #accessGate{display:flex}
     </div>
 
     <div class="page-view page-view-expense" id="expensePage">
-      <div class="page-date"><div class="day" id="dayExpense"></div><div class="date" id="dateExpense"></div></div>
       <section class="card">
       <div class="section section-pengeluaran section-with-action">
         <span>PENGELUARAN</span>
@@ -690,10 +696,8 @@ const dateKey=[
 const dayName=new Intl.DateTimeFormat("id-ID",{weekday:"long"}).format(now);
 const dateText=new Intl.DateTimeFormat("id-ID",{day:"2-digit",month:"long",year:"numeric"}).format(now);
 
-["Income","Expense"].forEach(k=>{
-  document.getElementById("day"+k).textContent=dayName;
-  document.getElementById("date"+k).textContent=dateText;
-});
+document.getElementById("dayHeader").textContent=dayName.toLocaleUpperCase("id-ID");
+document.getElementById("dateHeader").textContent=dateText;
 
 const expenseFields=document.getElementById("expenseFields");
 expenseFields.innerHTML="";

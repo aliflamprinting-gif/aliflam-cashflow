@@ -430,7 +430,6 @@ html.show-access-gate #accessGate{display:flex}
 .report-action.primary{background:#f5f5f5;color:#111;border-color:#f5f5f5}
 .report-action:disabled{opacity:.45;cursor:not-allowed}
 .report-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:13px}
-.report-actions .back-action{grid-column:1/-1}
 .report-balance-cards{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}
 .report-balance-card{border:1px solid #343a44;border-radius:12px;padding:11px 8px;background:#22262e;text-align:center}
 .report-balance-card span{display:block;color:#9aa1ab;font-size:9px;font-weight:900}
@@ -659,8 +658,7 @@ html.show-access-gate #accessGate{display:flex}
   </div>
   <div id="reportBody"></div>
   <div class="report-actions" id="reportResultActions" hidden>
-    <button type="button" class="report-action primary" id="reportPdfBtn">UNDUH PDF F4</button>
-    <button type="button" class="report-action back-action" id="reportBackBtn">KEMBALI</button>
+    <button type="button" class="report-action primary" id="reportPdfBtn" style="grid-column:1/-1;width:100%">UNDUH PDF F4</button>
   </div>
 </div></div>
 <div class="modal-backdrop" id="modalBackdrop">
@@ -1558,7 +1556,6 @@ document.getElementById("menuTodayReport").addEventListener("click",()=>openToda
 document.getElementById("menuFullReport").addEventListener("click",()=>openFullReport());
 document.getElementById("reportPopupClose").addEventListener("click",closeReport);
 document.getElementById("reportBackdrop").addEventListener("click",e=>{if(e.target.id==="reportBackdrop")closeReport();});
-document.getElementById("reportBackBtn").addEventListener("click",closeReport);
 document.getElementById("reportTabSingle").addEventListener("click",()=>setReportTab("single"));
 document.getElementById("reportTabRange").addEventListener("click",()=>setReportTab("range"));
 document.getElementById("reportLoadBtn").addEventListener("click",loadSelectedReport);

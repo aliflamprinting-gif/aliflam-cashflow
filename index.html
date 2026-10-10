@@ -411,7 +411,6 @@ button:active{
       <button type="button" class="header-menu-btn" id="summaryBtn" aria-label="Menu">☰</button>
       <div class="summary-menu" id="summaryMenu">
         <button type="button" id="menuSummary">📋 RINGKASAN</button>
-        <button type="button" id="menuSync">🔄 SINGKRON SALDO</button>
         <button type="button" id="menuPlan">💰 RENCANA PENGELUARAN</button>
         <button type="button" id="clearBtn" class="danger">🗑️ BERSIHKAN</button>
       </div>
@@ -485,6 +484,15 @@ button:active{
         <div class="page-balance-value" id="saldoAkhirExpense">Rp 0</div>
       </div>
     </div>
+
+    <section class="card status-card" id="saldoStatusCard">
+      <div class="section section-saldo">STATUS SALDO OTOMATIS</div>
+      <div class="sync-grid">
+        <div class="tool-field"><label for="syncSaldo">Saldo Rekening</label><div class="input-wrap"><span class="prefix">Rp</span><input id="syncSaldo" class="money" inputmode="numeric" autocomplete="off" placeholder="0"></div></div>
+        <div class="tool-field"><label for="syncCash">Cash</label><div class="input-wrap"><span class="prefix">Rp</span><input id="syncCash" class="money" inputmode="numeric" autocomplete="off" placeholder="0"></div></div>
+      </div>
+      <div class="tool-result" style="margin-top:12px"><div class="tool-result-label">KETERANGAN</div><div class="tool-result-value tool-neutral" id="syncResult">SALDO SINGKRON</div><div id="syncDifference" class="tool-result-label" style="margin-top:6px">Selisih Rp 0</div></div>
+    </section>
   </div>
 
   <nav class="bottom-nav" id="bottomNav" aria-label="Navigasi utama">
@@ -517,16 +525,6 @@ button:active{
     </div>
     <button type="button" class="expense-save-btn" id="saveExpenseItemBtn">SIMPAN PENGELUARAN</button>
   </div>
-</div></div>
-
-<div class="modal-backdrop" id="syncBackdrop"><div class="modal tool-modal">
-  <button type="button" class="popup-close" id="syncPopupClose" aria-label="Tutup">×</button>
-  <div class="tool-title">SINGKRON SALDO</div>
-  <div class="tool-sub">Cocokkan Saldo Operasional Akhir dengan saldo rekening dan cash.</div>
-  <div class="tool-field"><label>Saldo Operasional Akhir</label><div class="input-wrap"><span class="prefix">Rp</span><input id="syncOperational" class="money" inputmode="numeric" autocomplete="off" readonly></div></div>
-  <div class="sync-grid"><div class="tool-field"><label>Saldo</label><div class="input-wrap"><span class="prefix">Rp</span><input id="syncSaldo" class="money" inputmode="numeric" autocomplete="off" placeholder="0"></div></div><div class="tool-field"><label>Cash</label><div class="input-wrap"><span class="prefix">Rp</span><input id="syncCash" class="money" inputmode="numeric" autocomplete="off" placeholder="0"></div></div></div>
-  <div class="tool-result"><div class="tool-result-label">SELISIH SALDO</div><div class="tool-result-value tool-neutral" id="syncResult">Rp 0</div></div>
-  <div class="modal-actions"><button class="modal-ok" id="syncSave">SINGKRON</button></div>
 </div></div>
 
 <div class="modal-backdrop" id="planBackdrop"><div class="modal tool-modal">
@@ -622,6 +620,7 @@ function refresh(){
     el.classList.toggle("negative",t.saldoAkhir<0);
   });
   save();
+  syncState();
 }
 
 function formatMoneyInput(el){
@@ -1391,6 +1390,12 @@ document.getElementById("pdfBtn").addEventListener("click",async()=>{
     showModal("Pengeluaran belum disimpan","Simpan dulu pengeluaran yang sedang diisi.","OK",()=>document.getElementById("expenseInputAmount").focus());return;
   }
 
+  const currentTotals=collect();
+  if(currentTotals.saldoSebelumnya<0 || currentTotals.saldoAkhir<0){
+    showModal("Saldo operasional minus","Pengeluaran lebih besar dari sisa saldo operasional yang ada. Silakan input pemasukan atau sesuaikan pengeluaran. Data tidak akan disimpan.","OK");
+    return;
+  }
+
   const btn=document.getElementById("pdfBtn");
   const originalText=btn.textContent;
   btn.disabled=true;
@@ -1435,6 +1440,15 @@ function showModal(title,text,okLabel,onOk){
   document.getElementById("modalCancel").onclick=()=>{back.classList.remove("show");unlockModalScroll()};
 }
 
+function showToast(message){
+  const toast=document.getElementById("toast");
+  if(!toast)return;
+  toast.textContent=String(message||"Selesai");
+  toast.classList.add("show");
+  clearTimeout(showToast._timer);
+  showToast._timer=setTimeout(()=>toast.classList.remove("show"),2600);
+}
+
 function showSummary(){
   const t=collect(), inc=incomeRows(), exp=expenseRows();
   const section=(title,rows,total)=>'<div class="sum-section"><div class="sum-title">'+title+'</div>'+(rows.length?rows.map(x=>'<div class="sum-row"><span>'+escapeHTML(x[0])+'</span><b>'+rp(x[1])+'</b></div>').join(''):'<div class="sum-row"><span>Tidak ada</span><b>-</b></div>')+'<div class="sum-total"><span>Total '+title+'</span><span>'+rp(total)+'</span></div></div>';
@@ -1464,8 +1478,13 @@ function syncState(){
   const cash=moneyInputValue("syncCash");
   const diff=saldo+cash-t.saldoAkhir;
   const el=document.getElementById("syncResult");
-  el.textContent=(diff<0?"-":"")+rp(Math.abs(diff));
-  el.className="tool-result-value "+(diff<0?"tool-negative":diff>0?"tool-positive":"tool-neutral");
+  const detail=document.getElementById("syncDifference");
+  let label,colorClass;
+  if(t.saldoAkhir<0 || diff<0){label="SALDO MINUS";colorClass="tool-negative";}
+  else if(diff>0){label="SALDO PLUS";colorClass="tool-positive";}
+  else {label="SALDO SINGKRON";colorClass="tool-neutral";}
+  if(el){el.textContent=label;el.className="tool-result-value "+colorClass;}
+  if(detail){detail.textContent="Selisih "+(diff<0?"-":"")+rp(Math.abs(diff));detail.className="tool-result-label "+colorClass;}
   return diff;
 }
 function loadToolState(){
@@ -1477,13 +1496,6 @@ function loadToolState(){
 }
 function saveToolState(){
   localStorage.setItem(TOOL_STORAGE_KEY,JSON.stringify({syncSaldo:document.getElementById("syncSaldo").value,syncCash:document.getElementById("syncCash").value,planEntries}));
-}
-function openSync(){
-  document.getElementById("summaryMenu").classList.remove("show");
-  document.getElementById("syncOperational").value=collect().saldoAkhir.toLocaleString("id-ID");
-  syncState();
-  document.getElementById("syncBackdrop").classList.add("show");
-  lockModalScroll();
 }
 function renderPlan(){
   const list=document.getElementById("planList");
@@ -1508,10 +1520,8 @@ headerMenuBtn.addEventListener('click',e=>{e.stopPropagation();headerMenu.classL
 headerMenu.addEventListener('click',e=>e.stopPropagation());
 document.addEventListener('click',()=>headerMenu.classList.remove('show'));
 document.getElementById('menuSummary').addEventListener('click',()=>{headerMenu.classList.remove('show');showSummary();});
-document.getElementById('menuSync').addEventListener('click',()=>{headerMenu.classList.remove('show');openSync();});
 document.getElementById('menuPlan').addEventListener('click',()=>{headerMenu.classList.remove('show');openPlan();});
 document.getElementById('expensePopupClose').addEventListener('click',closeExpensePopup);
-document.getElementById('syncPopupClose').addEventListener('click',()=>{document.getElementById('syncBackdrop').classList.remove('show');unlockModalScroll()});
 document.getElementById('planPopupClose').addEventListener('click',()=>{document.getElementById('planBackdrop').classList.remove('show');unlockModalScroll()});
 document.getElementById('summaryPopupClose').addEventListener('click',()=>{document.getElementById('summaryBackdrop').classList.remove('show');unlockModalScroll()});
 
@@ -1522,7 +1532,6 @@ document.getElementById('clearBtn').addEventListener('click',()=>{
 
 document.getElementById('syncSaldo').addEventListener('input',e=>{formatMoneyInput(e.target);syncState();saveToolState()});
 document.getElementById('syncCash').addEventListener('input',e=>{formatMoneyInput(e.target);syncState();saveToolState()});
-document.getElementById('syncSave').addEventListener('click',()=>{syncState();saveToolState();document.getElementById('syncBackdrop').classList.remove('show');unlockModalScroll()});
 
 document.getElementById('planAdd').addEventListener('click',()=>{planEntries.unshift({desc:"",amount:""});renderPlan();const x=document.querySelector('[data-plan-desc="0"]');if(x)x.focus();});
 document.getElementById('planList').addEventListener('click',e=>{
@@ -1555,6 +1564,7 @@ document.getElementById('navIncome').addEventListener('click',()=>switchPage('in
 document.getElementById('navExpense').addEventListener('click',()=>switchPage('expense'));
 
 loadToolState();
+syncState();
 </script>
 </body>
 </html>
